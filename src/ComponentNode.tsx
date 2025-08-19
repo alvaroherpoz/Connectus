@@ -1,72 +1,100 @@
 import React from 'react';
-import type { NodeProps } from 'reactflow';
-import Port from './Port';
+import { Handle, Position } from 'reactflow';
+import './ComponentNode.css'; 
+import type { NodeProps, Edge, PortData } from './types'; 
 
-interface PortData {
-  id: string;
-  name: string;
-  type: 'comunicacion' | 'tiempo' | 'interrupcion';
-  dataType: string;
-  subtype?: 'normal' | 'conjugado';
+interface ComponentNodeProps extends NodeProps {
+    onDeletePort: (nodeId: string, portId: string) => void;
+    onDeleteConnection: (edgeId: string) => void;
+    nodeColors: Record<string, string>;
+    edges: Edge[];
 }
 
-interface NodeData {
-  name: string;
-  ports: PortData[];
-  node?: string;
-}
+const ComponentNode: React.FC<ComponentNodeProps> = ({ id, data, onDeletePort, onDeleteConnection, nodeColors, edges }) => {
+    const nodeColor = data.node ? nodeColors[data.node] : '#fff';
+    const borderColor = data.node ? 'black' : '#ccc';
 
-interface ComponentNodeProps extends NodeProps<NodeData> {
-  onDeletePort: (nodeId: string, portId: string) => void;
-  nodeColors: Record<string, string>;
-}
+    const portHandleStyle = (type: string, subtype: string | undefined): React.CSSProperties => {
+        let color = '#555';
+        if (type === 'comunicacion') {
+            color = subtype === 'nominal' ? '#ffc107' : '#007bff';
+        } else if (type === 'tiempo') {
+            color = '#ffaa00';
+        } else if (type === 'interrupcion') {
+            color = '#8e44ad';
+        }
+        return {
+            background: color,
+            borderColor: color,
+        };
+    };
 
-const ComponentNode: React.FC<ComponentNodeProps> = ({ id, data, onDeletePort, nodeColors }) => {
-  const normalPorts = data.ports.filter(p => p.type === 'comunicacion' && p.subtype === 'normal');
-  const conjugatedPorts = data.ports.filter(p => p.type === 'comunicacion' && p.subtype === 'conjugado');
-  const timePorts = data.ports.filter(p => p.type === 'tiempo');
-  const interruptPorts = data.ports.filter(p => p.type === 'interrupcion');
+    return (
+        <div 
+            className="component-node-container" 
+            style={{ 
+                border: `1px solid ${borderColor}`,
+                backgroundColor: nodeColor 
+            }}
+        >
+            <strong className="node-name">{data.name}</strong>
+            {data.node && (
+                <div className="node-label">
+                    Nodo: {data.node}
+                </div>
+            )}
+            <div className="ports-container">
+                {data.ports.map((port: PortData) => {
+                    const existingConnection = edges.find(
+                        (edge) => edge.sourceHandle === port.id || edge.targetHandle === port.id
+                    );
 
-  const backgroundColor = data.node ? nodeColors[data.node] || '#f5f5f5' : '#f5f5f5';
+                    const handleClick = () => {
+                        if (existingConnection) {
+                            onDeleteConnection(existingConnection.id);
+                        }
+                    };
 
-  return (
-    <div
-      style={{
-        border: '2px solid #555',
-        borderRadius: '8px',
-        padding: '10px',
-        backgroundColor: backgroundColor,
-        textAlign: 'center',
-        minWidth: '200px',
-        boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-      }}
-    >
-      <div style={{ fontWeight: 'bold', marginBottom: '10px' }}>
-        {data.name}
-        {data.node && <div style={{ fontSize: '10px', color: '#666' }}>({data.node})</div>}
-      </div>
-      
-      {/* Puertos de Comunicación */}
-      <div style={{ borderBottom: '1px solid #ddd', paddingBottom: '10px', marginBottom: '10px' }}>
-        {conjugatedPorts.map(p => (
-          <Port key={p.id} id={p.id} type={p.type} subtype={p.subtype} label={p.name} dataType={p.dataType} onDelete={() => onDeletePort(id, p.id)} />
-        ))}
-        {normalPorts.map(p => (
-          <Port key={p.id} id={p.id} type={p.type} subtype={p.subtype} label={p.name} dataType={p.dataType} onDelete={() => onDeletePort(id, p.id)} />
-        ))}
-      </div>
-
-      {/* Puertos de Tiempo e Interrupción */}
-      <div style={{ marginTop: '10px', borderTop: '1px solid #ddd', paddingTop: '10px' }}>
-        {timePorts.map(p => (
-          <Port key={p.id} id={p.id} type={p.type} label={p.name} dataType={p.dataType} onDelete={() => onDeletePort(id, p.id)} />
-        ))}
-        {interruptPorts.map(p => (
-          <Port key={p.id} id={p.id} type={p.type} label={p.name} dataType={p.dataType} onDelete={() => onDeletePort(id, p.id)} />
-        ))}
-      </div>
-    </div>
-  );
+                    return (
+                        <div key={port.id} className="port-item">
+                            <span>{port.name} <em className="port-type-info">({port.dataType})</em></span>
+                            <div className="port-actions">
+                                <span className="port-subtype">
+                                    {port.type === 'comunicacion' ? (port.subtype === 'nominal' ? 'Nominal' : 'Conjugado') : port.type}
+                                </span>
+                                <button
+                                    onClick={() => onDeletePort(id, port.id)}
+                                    className="delete-button"
+                                >
+                                    X
+                                </button>
+                            </div>
+                            {port.subtype === 'nominal' && (
+                                <Handle
+                                    type="source"
+                                    position={Position.Right}
+                                    id={port.id}
+                                    className="handle-style"
+                                    style={portHandleStyle(port.type, port.subtype)}
+                                    onClick={handleClick}
+                                />
+                            )}
+                            {port.subtype === 'conjugado' && (
+                                <Handle
+                                    type="target"
+                                    position={Position.Left}
+                                    id={port.id}
+                                    className="handle-style"
+                                    style={portHandleStyle(port.type, port.subtype)}
+                                    onClick={handleClick}
+                                />
+                            )}
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
 };
 
 export default ComponentNode;

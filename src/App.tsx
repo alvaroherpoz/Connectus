@@ -6,34 +6,22 @@ import ReactFlow, {
   Controls,
   MiniMap,
   Background,
+  useReactFlow
 } from 'reactflow';
-import type { Node, Edge, Connection, EdgeChange, BackgroundVariant, OnNodesChange, NodeProps } from 'reactflow';
-import 'reactflow/dist/style.css'; 
+import 'reactflow/dist/style.css';
+import { saveAs } from 'file-saver';
+import './App.css';
+
+import type { Node, Edge, Connection, EdgeChange, BackgroundVariant, OnNodesChange, NodeData, PortData, NodeProps, NodeChange } from './types';
 
 import ComponentNode from './ComponentNode';
 import ContextMenu from './ContextMenu';
-
-import JSZip from 'jszip';
-import { saveAs } from 'file-saver';
-
-interface PortData {
-  id: string;
-  name: string;
-  type: 'comunicacion' | 'tiempo' | 'interrupcion';
-  dataType: string;
-  subtype?: 'normal' | 'conjugado';
-}
-
-interface NodeData {
-  name: string;
-  ports: PortData[];
-  node?: string;
-}
+import { CodeGenerator } from './CodeGenerator';
 
 const initialNodes: Node<NodeData>[] = [
-  { id: '1', type: 'componentNode', data: { name: 'CPU', ports: [], node: 'NodeA' }, position: { x: 250, y: 50 } },
-  { id: '2', type: 'componentNode', data: { name: 'Memoria', ports: [], node: 'NodeA' }, position: { x: 50, y: 200 } },
-  { id: '3', type: 'componentNode', data: { name: 'GPIO', ports: [], node: 'NodeB' }, position: { x: 450, y: 300 } }
+  { id: '1', type: 'componentNode', data: { name: 'ICUASW', ports: [], node: 'NodeA' }, position: { x: 250, y: 50 }, selectable: false, style: { zIndex: 1 } },
+  { id: '2', type: 'componentNode', data: { name: 'ccbkgtcexec', ports: [], node: 'NodeA' }, position: { x: 50, y: 200 }, selectable: false, style: { zIndex: 1 } },
+  { id: '3', type: 'componentNode', data: { name: 'cctm_channelctrl', ports: [], node: 'NodeB' }, position: { x: 450, y: 300 }, selectable: false, style: { zIndex: 1 } }
 ];
 const initialEdges: Edge[] = [];
 
@@ -47,6 +35,12 @@ const App: React.FC = () => {
     'NodeA': '#e0f7fa',
     'NodeB': '#fff3e0',
   });
+  const [showToolsMenu, setShowToolsMenu] = useState(false);
+  const [downloadFileName, setDownloadFileName] = useState('edroom_diagrama');
+
+  const { getNodes, getEdges } = useReactFlow();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
 
   const onAddNode = useCallback(() => {
     const newId = nodeIdCounter.current.toString();
@@ -55,13 +49,17 @@ const App: React.FC = () => {
       type: 'componentNode',
       data: { name: `Componente ${newId}`, ports: [], node: '' },
       position: { x: Math.random() * 250, y: Math.random() * 250 },
+      selectable: false,
+      style: { zIndex: 1 },
     };
+    
     setNodes((nds) => nds.concat(newNode));
+    
     nodeIdCounter.current++;
   }, [setNodes]);
 
   const onNodesChange: OnNodesChange = useCallback(
-    (changes) => {
+    (changes: NodeChange[]) => { 
       setNodes((nds) => applyNodeChanges(changes, nds));
       if (menu) setMenu(null);
     }, [setNodes, menu]
@@ -74,6 +72,14 @@ const App: React.FC = () => {
   
   const onConnect = useCallback(
     (params: Connection) => {
+      const existingEdge = edges.find(
+        (edge) => edge.sourceHandle === params.sourceHandle || edge.targetHandle === params.targetHandle
+      );
+      if (existingEdge) {
+        alert('Error: Este puerto ya tiene una conexión.');
+        return;
+      }
+
       const sourceNode = nodes.find(n => n.id === params.source);
       const targetNode = nodes.find(n => n.id === params.target);
 
@@ -91,17 +97,23 @@ const App: React.FC = () => {
         return;
       }
       
-      const isNormalToConjugado = sourcePort?.subtype === 'normal' && targetPort?.subtype === 'conjugado';
+      const isNominalToConjugado = sourcePort?.subtype === 'nominal' && targetPort?.subtype === 'conjugado';
       const areDataTypesMatching = sourcePort?.dataType === targetPort?.dataType;
-      
-      if (isNormalToConjugado && areDataTypesMatching) {
+      const arePortNamesMatching = sourcePort?.name === targetPort?.name;
+
+      if (!arePortNamesMatching) {
+        alert('Error: Los puertos solo se pueden conectar si tienen el mismo nombre.');
+        return;
+      }
+
+      if (isNominalToConjugado && areDataTypesMatching && arePortNamesMatching) {
         setEdges((eds) => addEdge(params, eds));
-      } else if (!isNormalToConjugado) {
-        alert('Error: Un puerto de comunicación Normal (salida) solo se puede conectar a un puerto de comunicación Conjugado (entrada).');
+      } else if (!isNominalToConjugado) {
+        alert('Error: Un puerto de comunicación Nominal (salida) solo se puede conectar a un puerto de comunicación Conjugado (entrada).');
       } else if (!areDataTypesMatching) {
         alert(`Error de tipo de dato: Los tipos no coinciden. Origen: '${sourcePort?.dataType}', Destino: '${targetPort?.dataType}'.`);
       }
-    }, [setEdges, nodes]
+    }, [setEdges, nodes, edges]
   );
 
   const onNodeContextMenu = useCallback((event: React.MouseEvent, node: Node) => {
@@ -109,7 +121,7 @@ const App: React.FC = () => {
     setMenu({ x: event.clientX, y: event.clientY, nodeId: node.id });
   }, []);
 
-  const handleAddPort = useCallback((name: string, type: 'comunicacion' | 'tiempo' | 'interrupcion', subtype: 'normal' | 'conjugado' | undefined, dataType: string) => {
+  const handleAddPort = useCallback((name: string, type: 'comunicacion' | 'tiempo' | 'interrupcion', subtype: 'nominal' | 'conjugado' | undefined, dataType: string) => {
     if (!menu) return;
     setNodes(nds => {
       return nds.map(node => {
@@ -156,7 +168,11 @@ const App: React.FC = () => {
 
     setNodes(nds => nds.map(node => {
       if (node.id === menu.nodeId) {
-        return { ...node, data: { ...node.data, node: nodeName } };
+        return { 
+            ...node, 
+            data: { ...node.data, node: nodeName },
+            style: { ...node.style, zIndex: 1 } 
+        };
       }
       return node;
     }));
@@ -164,6 +180,15 @@ const App: React.FC = () => {
   }, [menu, setNodes, nodeColors, setNodeColors]);
 
   const handleDeletePort = useCallback((nodeId: string, portId: string) => {
+    const isConnected = edges.some(edge => edge.sourceHandle === portId || edge.targetHandle === portId);
+    
+    if (isConnected) {
+        const confirmation = window.confirm("Este puerto está conectado. ¿Estás seguro de que quieres eliminar el puerto y todas sus conexiones?");
+        if (!confirmation) {
+            return;
+        }
+    }
+
     setEdges((eds) => eds.filter(edge => edge.sourceHandle !== portId && edge.targetHandle !== portId));
 
     setNodes((nds) => nds.map(node => {
@@ -173,207 +198,124 @@ const App: React.FC = () => {
       }
       return node;
     }));
-  }, [setNodes, setEdges]);
+  }, [setNodes, setEdges, edges]);
   
+  const handleDeleteConnection = useCallback((edgeId: string) => {
+      setEdges((eds) => eds.filter(e => e.id !== edgeId));
+  }, [setEdges]);
+
   const nodeTypes = useMemo(() => ({
     componentNode: (props: NodeProps<NodeData>) => (
       <ComponentNode
         {...props}
         onDeletePort={handleDeletePort}
+        onDeleteConnection={handleDeleteConnection}
         nodeColors={nodeColors}
+        edges={edges}
       />
     ),
-  }), [handleDeletePort, nodeColors]);
+  }), [handleDeletePort, handleDeleteConnection, nodeColors, edges]);
 
   const handleGenerateCode = useCallback(() => {
-    const mainZip = new JSZip();
-
-    const components = nodes.map(node => ({
-        id: node.id,
-        name: node.data.name,
-        nodeName: node.data.node,
-        ports: node.data.ports,
-    }));
-    const connections = edges.map(edge => ({
-        sourceId: edge.source,
-        sourceHandle: edge.sourceHandle,
-        targetId: edge.target,
-        targetHandle: edge.targetHandle,
-    }));
-
-    const uniqueNodeNames = Array.from(new Set(components.map(c => c.nodeName).filter(name => typeof name === 'string')));
-    
-    uniqueNodeNames.forEach(localNodeName => {
-        const nodeFolder = mainZip.folder(localNodeName);
-        
-        const localComponents = components.filter(c => c.nodeName === localNodeName);
-        const remoteComponents = components.filter(c => c.nodeName !== localNodeName && c.nodeName);
-        
-        const srcFolder = nodeFolder?.folder("src");
-        const localComponentsFolder = srcFolder?.folder("local/components");
-        const remoteComponentsFolder = srcFolder?.folder("remote/components");
-        const remoteNodesFolder = srcFolder?.folder("remote/nodes");
-
-        const mainFileContent = `// main.c
-// Archivo principal del sistema EDROOM para el nodo '${localNodeName}'
-// Generado automáticamente por el editor de componentes.
-
-#include "edroom_types.h"
-#include "edroom_component.h"
-${localComponents
-    .map(c => `#include "local/components/${c.name.toLowerCase()}/${c.name.toLowerCase()}.h"`).join('\n')}
-${remoteComponents
-    .map(c => `#include "remote/components/${c.name.toLowerCase()}/${c.name.toLowerCase()}.h"`).join('\n')}
-
-void setup_system() {
-    ${components.map(c => `// edroom_comp_${c.name.toLowerCase()}_init();`).join('\n    ')}
-
-    ${connections.map(conn => {
-        const sourceComp = components.find(c => c.id === conn.sourceId);
-        const targetComp = components.find(c => c.id === conn.targetId);
-        const sourcePort = sourceComp?.ports.find(p => p.id === conn.sourceHandle);
-        const targetPort = targetComp?.ports.find(p => p.id === conn.targetHandle);
-
-        if (sourceComp && targetComp && sourcePort && targetPort) {
-            return `    // Conexión: ${sourceComp.name}.${sourcePort.name} (${sourcePort.dataType}) -> ${targetComp.name}.${targetPort.name} (${targetPort.dataType})`;
-        }
-        return `    // Conexión no válida o incompleta: ${conn.sourceId}:${conn.sourceHandle} -> ${conn.targetId}:${conn.targetHandle}`;
-    }).join('\n')}
-
-    ${components.flatMap(c => c.ports.filter(p => p.type !== 'comunicacion').map(p => {
-        if (p.type === 'tiempo') {
-            return `    // Puerto de Tiempo: ${c.name}.${p.name} (${p.dataType})`;
-        } else if (p.type === 'interrupcion') {
-            return `    // Puerto de Interrupción: ${c.name}.${p.name} (${p.dataType})`;
-        }
-        return '';
-    })).filter(Boolean).join('\n    ')}
-}
-
-int main() {
-    setup_system();
-    return 0;
-}
-    `;
-    srcFolder?.file("main.c", mainFileContent);
-
-    localComponents.forEach(component => {
-        const folder = localComponentsFolder?.folder(component.name.toLowerCase());
-        const headerContent = `// ${component.name.toLowerCase()}.h
-#pragma once
-
-#include "edroom_types.h"
-#include "edroom_component.h"
-
-// Este es un componente LOCAL para el nodo '${localNodeName}'.
-
-// Definición de puertos para ${component.name}
-${component.ports.filter(p => p.type === 'comunicacion' && p.subtype === 'normal')
-    .map(p => `// extern EDROOM_CAN_Port ${p.name}; // Puerto Normal (${p.dataType})`)
-    .join('\n')}
-${component.ports.filter(p => p.type === 'comunicacion' && p.subtype === 'conjugado')
-    .map(p => `// extern EDROOM_CAN_Port ${p.name}; // Puerto Conjugado (${p.dataType})`)
-    .join('\n')}
-
-${component.ports.filter(p => p.type === 'tiempo')
-    .map(p => `// extern EDROOM_Timing_Port ${p.name}; // Puerto de Tiempo (${p.dataType})`)
-    .join('\n')}
-
-${component.ports.filter(p => p.type === 'interrupcion')
-    .map(p => `// extern EDROOM_Interrupt_Port ${p.name}; // Puerto de Interrupción (${p.dataType})`)
-    .join('\n')}
-`;
-        const sourceContent = `// ${component.name.toLowerCase()}.c
-#include "${component.name.toLowerCase()}.h"
-// Implementación de la lógica para el componente ${component.name}
-`;
-        folder?.file(`${component.name.toLowerCase()}.h`, headerContent);
-        folder?.file(`${component.name.toLowerCase()}.c`, sourceContent);
-    });
-
-    remoteComponents.forEach(component => {
-        const folder = remoteComponentsFolder?.folder(component.name.toLowerCase());
-        const headerContent = `// ${component.name.toLowerCase()}.h
-#pragma once
-
-#include "edroom_types.h"
-#include "edroom_component.h"
-
-// Este es un componente REMOTO para el nodo '${localNodeName}'.
-
-// Definición de puertos para ${component.name}
-${component.ports.filter(p => p.type === 'comunicacion' && p.subtype === 'normal')
-    .map(p => `// extern EDROOM_CAN_Port ${p.name}; // Puerto Normal (${p.dataType})`)
-    .join('\n')}
-${component.ports.filter(p => p.type === 'comunicacion' && p.subtype === 'conjugado')
-    .map(p => `// extern EDROOM_CAN_Port ${p.name}; // Puerto Conjugado (${p.dataType})`)
-    .join('\n')}
-
-${component.ports.filter(p => p.type === 'tiempo')
-    .map(p => `// extern EDROOM_Timing_Port ${p.name}; // Puerto de Tiempo (${p.dataType})`)
-    .join('\n')}
-
-${component.ports.filter(p => p.type === 'interrupcion')
-    .map(p => `// extern EDROOM_Interrupt_Port ${p.name}; // Puerto de Interrupción (${p.dataType})`)
-    .join('\n')}
-`;
-        const sourceContent = `// ${component.name.toLowerCase()}.c
-#include "${component.name.toLowerCase()}.h"
-// Implementación de la lógica para el componente ${component.name}
-`;
-        folder?.file(`${component.name.toLowerCase()}.h`, headerContent);
-        folder?.file(`${component.name.toLowerCase()}.c`, sourceContent);
-    });
-
-    const remoteNodeNames = uniqueNodeNames.filter(n => n !== localNodeName);
-    remoteNodeNames.forEach(remoteNodeName => {
-        const folder = remoteNodesFolder?.folder(remoteNodeName?.toLowerCase());
-        const nodeHeaderContent = `// ${remoteNodeName?.toLowerCase()}.h
-#pragma once
-
-// Este es el archivo de configuración para el nodo REMOTO: ${remoteNodeName}
-`;
-        const nodeSourceContent = `// ${remoteNodeName?.toLowerCase()}.c
-#include "${remoteNodeName?.toLowerCase()}.h"
-
-// Implementación de la lógica o configuración del nodo ${remoteNodeName}
-`;
-        folder?.file(`${remoteNodeName?.toLowerCase()}.h`, nodeHeaderContent);
-        folder?.file(`${remoteNodeName?.toLowerCase()}.c`, nodeSourceContent);
-    });
-
-    });
-
-    mainZip.generateAsync({ type: "blob" })
-        .then(function(content) {
-            saveAs(content, "edroom_project_all_nodes.zip");
-        });
-
+    CodeGenerator.generateCodeAndDownload(nodes, edges);
+    setShowToolsMenu(false);
   }, [nodes, edges]);
 
-  return (
-    <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <button
-        onClick={onAddNode}
-        style={{
-          position: 'absolute', top: 10, left: 10, zIndex: 4, padding: '8px 12px',
-          backgroundColor: '#007bff', color: 'white', border: 'none',
-          borderRadius: '4px', cursor: 'pointer', boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
-        }}
-      >
-        Añadir Componente
-      </button>
+  const handleDownload = useCallback(() => {
+    const data = JSON.stringify({ nodes: getNodes(), edges: getEdges() }, null, 2);
+    const blob = new Blob([data], { type: 'application/json' });
+    const fileName = downloadFileName.trim() || 'edroom_diagrama';
+    saveAs(blob, `${fileName}.json`);
+    setShowToolsMenu(false);
+  }, [getNodes, getEdges, downloadFileName]);
 
-      <button
-        onClick={handleGenerateCode}
-        style={{
-          position: 'absolute', top: 10, left: 180, zIndex: 4, padding: '8px 12px',
-          backgroundColor: '#28a745', color: 'white', border: 'none',
-          borderRadius: '4px', cursor: 'pointer', boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
-        }}
-      >
-        Generar Código
-      </button>
+  const handleLoad = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const content = e.target?.result as string;
+        const parsedData = JSON.parse(content);
+        
+        const loadedNodes = parsedData.nodes;
+        const loadedEdges = parsedData.edges;
+
+        const newColors: Record<string, string> = {};
+        loadedNodes.forEach((node: Node<NodeData>) => {
+            if (node.data.node) {
+                if (node.style && node.style.backgroundColor) {
+                    newColors[node.data.node] = node.style.backgroundColor;
+                } else if (!newColors[node.data.node]) {
+                    const hue = Math.floor(Math.random() * 360);
+                    newColors[node.data.node] = `hsl(${hue}, 70%, 85%)`;
+                }
+            }
+        });
+        
+        setNodes(loadedNodes);
+        setEdges(loadedEdges);
+        setNodeColors(newColors);
+
+        alert('Diagrama cargado con éxito!');
+        setShowToolsMenu(false);
+      } catch (error) {
+        alert('Error al cargar el archivo. Asegúrate de que sea un archivo JSON válido.');
+        console.error('Error loading diagram:', error);
+      } finally {
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      }
+    };
+    reader.readAsText(file);
+  }, []);
+
+  const handleLoadButtonClick = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  return (
+    <div className="app-container">
+      <div className="toolbar">
+        <button className="toolbar-button" onClick={onAddNode}>
+          Añadir Componente
+        </button>
+        <div className="tools-dropdown">
+          <button className="toolbar-button toolbar-button-tools" onClick={() => setShowToolsMenu(!showToolsMenu)}>Herramientas</button>
+          {showToolsMenu && (
+            <div className="dropdown-menu">
+              <div className="dropdown-item file-input-container">
+                <input
+                  type="text"
+                  placeholder="Nombre del archivo"
+                  value={downloadFileName}
+                  onChange={(e) => setDownloadFileName(e.target.value)}
+                />
+                <button onClick={handleDownload}>Descargar Diagrama</button>
+              </div>
+              <button className="dropdown-item" onClick={handleLoadButtonClick}>Cargar Diagrama</button>
+              <button className="dropdown-item" onClick={handleGenerateCode}>Generar Código</button>
+            </div>
+          )}
+        </div>
+      </div>
+      
+      <label htmlFor="file-upload" className="hidden-input-label">Cargar Archivo</label>
+      <input
+        id="file-upload"
+        type="file"
+        ref={fileInputRef}
+        onChange={handleLoad}
+        className="hidden-input"
+        accept=".json,.edroom"
+      />
 
       <ReactFlow
         nodes={nodes}
