@@ -1,100 +1,72 @@
-import React from 'react';
+import React, { memo, useCallback } from 'react';
 import { Handle, Position } from 'reactflow';
-import './ComponentNode.css'; 
-import type { NodeProps, Edge, PortData } from './types'; 
+import type { NodeProps } from 'reactflow';
+import type { NodeData, PortData } from './types';
+import './ComponentNode.css';
 
-interface ComponentNodeProps extends NodeProps {
-    onDeletePort: (nodeId: string, portId: string) => void;
-    onDeleteConnection: (edgeId: string) => void;
-    nodeColors: Record<string, string>;
-    edges: Edge[];
+interface ComponentNodeProps extends NodeProps<NodeData> {
+  onDeletePort: (nodeId: string, portId: string) => void;
+  onPortClick: (portData: PortData) => void;
+  nodeColors: Record<string, string>;
 }
 
-const ComponentNode: React.FC<ComponentNodeProps> = ({ id, data, onDeletePort, onDeleteConnection, nodeColors, edges }) => {
-    const nodeColor = data.node ? nodeColors[data.node] : '#fff';
-    const borderColor = data.node ? 'black' : '#ccc';
+const ComponentNode: React.FC<ComponentNodeProps> = memo(({ id, data, onDeletePort, onPortClick, nodeColors }) => {
 
-    const portHandleStyle = (type: string, subtype: string | undefined): React.CSSProperties => {
-        let color = '#555';
-        if (type === 'comunicacion') {
-            color = subtype === 'nominal' ? '#ffc107' : '#007bff';
-        } else if (type === 'tiempo') {
-            color = '#ffaa00';
-        } else if (type === 'interrupcion') {
-            color = '#8e44ad';
-        }
-        return {
-            background: color,
-            borderColor: color,
-        };
-    };
+  const getColor = (nodeName: string) => {
+    return nodeColors[nodeName] || '#999';
+  };
 
-    return (
-        <div 
-            className="component-node-container" 
-            style={{ 
-                border: `1px solid ${borderColor}`,
-                backgroundColor: nodeColor 
-            }}
-        >
-            <strong className="node-name">{data.name}</strong>
-            {data.node && (
-                <div className="node-label">
-                    Nodo: {data.node}
+  const nodeStyle = data.node ? { backgroundColor: getColor(data.node) } : {};
+
+  const getHandleType = useCallback((port: PortData) => {
+    if (port.type === 'comunicacion' && port.subtype === 'nominal') {
+      return 'source';
+    } else if (port.type === 'comunicacion' && port.subtype === 'conjugado') {
+      return 'target';
+    }
+    return undefined;
+  }, []);
+
+  const handlePortClick = useCallback((portData: PortData) => {
+    onPortClick(portData);
+  }, [onPortClick]);
+  
+  return (
+    <div className="component-node" style={nodeStyle}>
+      <div className="component-node-header">
+        {data.node && <span className="node-tag">{data.node} ::</span>}
+        <span className="component-name-label">{data.name}</span>
+      </div>
+      <div className="component-node-ports-container">
+        {data.ports.length > 0 && (
+          <div className="ports-list">
+            {data.ports.map((port) => (
+              <div key={port.id} className="port-item">
+                <div 
+                  className="port-item-info"
+                  onClick={() => handlePortClick(port)}
+                >
+                  <span className="port-name">{port.name}</span>
+                  <span className="port-type-tag">({port.type})</span>
                 </div>
-            )}
-            <div className="ports-container">
-                {data.ports.map((port: PortData) => {
-                    const existingConnection = edges.find(
-                        (edge) => edge.sourceHandle === port.id || edge.targetHandle === port.id
-                    );
-
-                    const handleClick = () => {
-                        if (existingConnection) {
-                            onDeleteConnection(existingConnection.id);
-                        }
-                    };
-
-                    return (
-                        <div key={port.id} className="port-item">
-                            <span>{port.name} <em className="port-type-info">({port.dataType})</em></span>
-                            <div className="port-actions">
-                                <span className="port-subtype">
-                                    {port.type === 'comunicacion' ? (port.subtype === 'nominal' ? 'Nominal' : 'Conjugado') : port.type}
-                                </span>
-                                <button
-                                    onClick={() => onDeletePort(id, port.id)}
-                                    className="delete-button"
-                                >
-                                    X
-                                </button>
-                            </div>
-                            {port.subtype === 'nominal' && (
-                                <Handle
-                                    type="source"
-                                    position={Position.Right}
-                                    id={port.id}
-                                    className="handle-style"
-                                    style={portHandleStyle(port.type, port.subtype)}
-                                    onClick={handleClick}
-                                />
-                            )}
-                            {port.subtype === 'conjugado' && (
-                                <Handle
-                                    type="target"
-                                    position={Position.Left}
-                                    id={port.id}
-                                    className="handle-style"
-                                    style={portHandleStyle(port.type, port.subtype)}
-                                    onClick={handleClick}
-                                />
-                            )}
-                        </div>
-                    );
-                })}
-            </div>
-        </div>
-    );
-};
+                {getHandleType(port) && (
+                  <Handle
+                    type={getHandleType(port) as "source" | "target"}
+                    position={getHandleType(port) === 'source' ? Position.Right : Position.Left}
+                    id={port.id}
+                    className={`custom-handle ${getHandleType(port)}`}
+                  />
+                )}
+                <button className="delete-port-button" onClick={() => onDeletePort(id, port.id)}>
+                  &times;
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+});
 
 export default ComponentNode;

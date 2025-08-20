@@ -1,74 +1,124 @@
 /* src/ComponentNode.css */
 
-.component-node-container {
-  padding: 15px;
+.component-node {
+  border: 1px solid #999;
   border-radius: 8px;
-  text-align: center;
+  background-color: white;
   min-width: 150px;
+  box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.1);
   font-family: Arial, sans-serif;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  padding: 0;
+  overflow: hidden;
 }
 
-.node-name {
+.component-node-header {
+  padding: 8px 10px;
+  background-color: #f0f0f0;
+  border-bottom: 1px solid #ccc;
+  text-align: center;
+  font-weight: bold;
   font-size: 14px;
+  word-wrap: break-word;
+  white-space: normal;
 }
 
-.node-label {
-  font-size: 10px;
-  color: #666;
-  margin-top: 4px;
+.node-tag {
+  color: #555;
+  font-size: 12px;
+  margin-right: 4px;
 }
 
-.ports-container {
-  margin-top: 10px;
+.component-name-label {
+  font-size: 14px;
+  color: #333;
+}
+
+.component-node-ports-container {
+  padding: 10px;
+}
+
+.ports-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .port-item {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 2px 8px;
-  margin: 4px 0;
-  border-radius: 4px;
-  border: 1px solid #ddd;
+  justify-content: space-between;
   background-color: #f9f9f9;
-  font-size: 12px;
+  border: 1px solid #eee;
+  border-radius: 4px;
   position: relative;
+  padding: 4px 8px;
+  min-height: 24px;
 }
 
-.port-type-info {
-  font-size: 10px;
-  color: #999;
-}
-
-.port-actions {
+.port-item-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
   display: flex;
   align-items: center;
+  gap: 4px;
+  color: #333;
+  font-size: 10px; /* Reducción del tamaño de la fuente */
 }
 
-.port-subtype {
-  font-size: 10px;
-  margin-right: 5px;
-  color: #555;
+.port-name {
+  font-size: 10px; /* Reducción del tamaño de la fuente */
+  font-weight: bold;
 }
 
-.delete-button {
-  margin-left: 5px;
-  padding: 1px 4px;
-  font-size: 10px;
-  background-color: #dc3545;
-  color: white;
+.port-type-tag {
+  font-size: 9px; /* Reducción del tamaño de la fuente */
+  color: #666;
+}
+
+.delete-port-button {
+  background: none;
   border: none;
-  border-radius: 3px;
+  color: #e74c3c;
   cursor: pointer;
+  font-size: 14px;
+  padding: 2px;
+  line-height: 1;
+  margin-left: 8px;
+  opacity: 0.8;
+  transition: opacity 0.2s ease;
 }
 
-.handle-style {
-  background: #fff;
-  width: 8px;
-  height: 8px;
+.delete-port-button:hover {
+  opacity: 1;
+}
+
+/* Estilos para los handles de React Flow */
+.custom-handle {
+  width: 10px !important;
+  height: 10px !important;
   border-radius: 50%;
-  border: 1px solid #555;
-  top: 50%;
-  transform: translateY(-50%);
+  border: 1px solid #fff;
+  background: #555;
+}
+
+.custom-handle.target {
+  left: -5px;
+  border-color: #555;
+  background: #555;
+}
+
+.custom-handle.source {
+  right: -5px;
+  border-color: #555;
+  background: #555;
+}
+
+.custom-handle.target.react-flow__handle {
+  background-color: #007bff;
+}
+
+.custom-handle.source.react-flow__handle {
+  background-color: #ffc107;
 }

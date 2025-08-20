@@ -6,22 +6,23 @@ import ReactFlow, {
   Controls,
   MiniMap,
   Background,
-  useReactFlow
+  useReactFlow,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { saveAs } from 'file-saver';
 import './App.css';
 
-import type { Node, Edge, Connection, EdgeChange, BackgroundVariant, OnNodesChange, NodeData, PortData, NodeProps, NodeChange } from './types';
+import type { Node, Edge, Connection, EdgeChange, BackgroundVariant, OnNodesChange, NodeData, PortData, NodeProps, NodeChange, Message } from './types';
 
 import ComponentNode from './ComponentNode';
 import ContextMenu from './ContextMenu';
+import PortInfoPanel from './PortInfoPanel';
 import { CodeGenerator } from './CodeGenerator';
 
 const initialNodes: Node<NodeData>[] = [
-  { id: '1', type: 'componentNode', data: { name: 'ICUASW', ports: [], node: 'NodeA' }, position: { x: 250, y: 50 }, selectable: false, style: { zIndex: 1 } },
-  { id: '2', type: 'componentNode', data: { name: 'ccbkgtcexec', ports: [], node: 'NodeA' }, position: { x: 50, y: 200 }, selectable: false, style: { zIndex: 1 } },
-  { id: '3', type: 'componentNode', data: { name: 'cctm_channelctrl', ports: [], node: 'NodeB' }, position: { x: 450, y: 300 }, selectable: false, style: { zIndex: 1 } }
+  { id: '1', type: 'componentNode', data: { name: 'ICUASW', ports: [], node: 'NodeA' }, position: { x: 250, y: 50 }, selectable: true, style: { zIndex: 1 } },
+  { id: '2', type: 'componentNode', data: { name: 'ccbkgtcexec', ports: [], node: 'NodeA' }, position: { x: 50, y: 200 }, selectable: true, style: { zIndex: 1 } },
+  { id: '3', type: 'componentNode', data: { name: 'cctm_channelctrl', ports: [], node: 'NodeB' }, position: { x: 450, y: 300 }, selectable: true, style: { zIndex: 1 } }
 ];
 const initialEdges: Edge[] = [];
 
@@ -30,26 +31,26 @@ const App: React.FC = () => {
   const [edges, setEdges] = useState<Edge[]>(initialEdges);
   const nodeIdCounter = useRef(4);
   const [menu, setMenu] = useState<{ x: number; y: number; nodeId: string; } | null>(null);
-  const [dataTypes, setDataTypes] = useState(['int', 'float', 'string', 'bool', 'char']);
+  const [dataTypes, setDataTypes] = useState(['int', 'float', 'string', 'bool', 'char', 'CDRecovAction', 'CDTMList']);
   const [nodeColors, setNodeColors] = useState<Record<string, string>>({
     'NodeA': '#e0f7fa',
     'NodeB': '#fff3e0',
   });
   const [showToolsMenu, setShowToolsMenu] = useState(false);
   const [downloadFileName, setDownloadFileName] = useState('edroom_diagrama');
+  const [selectedPort, setSelectedPort] = useState<PortData | null>(null);
 
   const { getNodes, getEdges } = useReactFlow();
   const fileInputRef = useRef<HTMLInputElement>(null);
-
 
   const onAddNode = useCallback(() => {
     const newId = nodeIdCounter.current.toString();
     const newNode: Node<NodeData> = {
       id: newId,
       type: 'componentNode',
-      data: { name: `Componente ${newId}`, ports: [], node: '' },
+      data: { name: `Componente${newId}`, ports: [], node: '' },
       position: { x: Math.random() * 250, y: Math.random() * 250 },
-      selectable: false,
+      selectable: true,
       style: { zIndex: 1 },
     };
     
@@ -72,13 +73,12 @@ const App: React.FC = () => {
   
   const onConnect = useCallback(
     (params: Connection) => {
-      const existingEdge = edges.find(
-        (edge) => edge.sourceHandle === params.sourceHandle || edge.targetHandle === params.targetHandle
+      // Elimina la conexión anterior inmediatamente, antes de cualquier validación
+      setEdges((eds) => 
+        eds.filter(
+          (edge) => !(edge.sourceHandle === params.sourceHandle || edge.targetHandle === params.targetHandle)
+        )
       );
-      if (existingEdge) {
-        alert('Error: Este puerto ya tiene una conexión.');
-        return;
-      }
 
       const sourceNode = nodes.find(n => n.id === params.source);
       const targetNode = nodes.find(n => n.id === params.target);
@@ -98,7 +98,7 @@ const App: React.FC = () => {
       }
       
       const isNominalToConjugado = sourcePort?.subtype === 'nominal' && targetPort?.subtype === 'conjugado';
-      const areDataTypesMatching = sourcePort?.dataType === targetPort?.dataType;
+      const areDataTypesMatching = sourcePort?.messages?.[0]?.dataType === targetPort?.messages?.[0]?.dataType;
       const arePortNamesMatching = sourcePort?.name === targetPort?.name;
 
       if (!arePortNamesMatching) {
@@ -111,40 +111,103 @@ const App: React.FC = () => {
       } else if (!isNominalToConjugado) {
         alert('Error: Un puerto de comunicación Nominal (salida) solo se puede conectar a un puerto de comunicación Conjugado (entrada).');
       } else if (!areDataTypesMatching) {
-        alert(`Error de tipo de dato: Los tipos no coinciden. Origen: '${sourcePort?.dataType}', Destino: '${targetPort?.dataType}'.`);
+        alert(`Error de tipo de dato: Los tipos no coinciden. Origen: '${sourcePort?.messages?.[0]?.dataType}', Destino: '${targetPort?.messages?.[0]?.dataType}'.`);
       }
-    }, [setEdges, nodes, edges]
+    }, [setEdges, nodes]
   );
+
+  const onEdgesDelete = useCallback((edgesToDelete: Edge[]) => {
+    setEdges((eds) => eds.filter(edge => !edgesToDelete.includes(edge)));
+  }, [setEdges]);
 
   const onNodeContextMenu = useCallback((event: React.MouseEvent, node: Node) => {
     event.preventDefault();
     setMenu({ x: event.clientX, y: event.clientY, nodeId: node.id });
   }, []);
 
-  const handleAddPort = useCallback((name: string, type: 'comunicacion' | 'tiempo' | 'interrupcion', subtype: 'nominal' | 'conjugado' | undefined, dataType: string) => {
-    if (!menu) return;
-    setNodes(nds => {
-      return nds.map(node => {
-        if (node.id === menu.nodeId) {
-          const newPort: PortData = {
-            id: `${node.id}-${name}-${Date.now()}`,
-            name,
-            type,
-            subtype,
-            dataType,
-          };
-          const newPorts = [...node.data.ports, newPort];
-          return { ...node, data: { ...node.data, ports: newPorts } };
+  const handleAddPort = useCallback(
+      (nodeId: string, name: string, type: 'comunicacion' | 'tiempo' | 'interrupcion', subtype: 'nominal' | 'conjugado' | undefined, messages: Message[], interruptHandler?: string) => {
+          setNodes((nds) =>
+              nds.map((node) => {
+                  if (node.id === nodeId) {
+                      const newPort: PortData = {
+                          id: `${node.id}-${name}`,
+                          name,
+                          type,
+                          subtype,
+                          messages,
+                          interruptHandler,
+                      };
+                      return {
+                          ...node,
+                          data: {
+                              ...node.data,
+                              ports: [...node.data.ports, newPort],
+                          },
+                      };
+                  }
+                  return node;
+              })
+          );
+          setMenu(null);
+      },
+      [setNodes, setMenu]
+  );
+  
+  const handleAddDataType = useCallback((newType: string) => {
+    if (newType && !dataTypes.includes(newType)) {
+        setDataTypes((prevTypes) => [...prevTypes, newType]);
+    }
+  }, [dataTypes, setDataTypes]);
+
+  const handleAddConjugatePort = useCallback((nodeId: string, nominalPortId: string) => {
+    let nominalPort: PortData | undefined;
+    nodes.forEach(node => {
+        const foundPort = node.data.ports.find(p => p.id === nominalPortId);
+        if (foundPort && foundPort.type === 'comunicacion' && foundPort.subtype === 'nominal') {
+            nominalPort = foundPort;
+        }
+    });
+
+    if (!nominalPort) {
+        alert('Error: No se encontró el puerto nominal de origen.');
+        setMenu(null);
+        return;
+    }
+
+    const conjugatedMessages = nominalPort.messages?.map(msg => ({
+        ...msg,
+        direction: msg.direction === 'entrada' ? 'salida' : 'entrada',
+    }));
+
+    const newPort: PortData = {
+        id: `${nodeId}-${nominalPort.name}`,
+        name: nominalPort.name,
+        type: 'comunicacion',
+        subtype: 'conjugado',
+        messages: conjugatedMessages as Message[],
+    };
+    
+    setNodes(nds => nds.map(node => {
+        if (node.id === nodeId) {
+            const portExists = node.data.ports.some(p => p.id === newPort.id);
+            if (portExists) {
+                alert('Error: Ya existe un puerto con este nombre en el componente.');
+                return node;
+            }
+            return {
+                ...node,
+                data: {
+                    ...node.data,
+                    ports: [...node.data.ports, newPort],
+                },
+            };
         }
         return node;
-      });
-    });
+    }));
     setMenu(null);
-    if (!dataTypes.includes(dataType)) {
-      setDataTypes((prevDataTypes) => [...prevDataTypes, dataType]);
-    }
-  }, [menu, setNodes, dataTypes, setDataTypes]);
-
+  }, [nodes, setNodes, setMenu]);
+  
   const handleRenameComponent = useCallback((newName: string) => {
     if (!menu || !newName) return;
     setNodes(nds => nds.map(node => {
@@ -180,17 +243,21 @@ const App: React.FC = () => {
   }, [menu, setNodes, nodeColors, setNodeColors]);
 
   const handleDeletePort = useCallback((nodeId: string, portId: string) => {
-    const isConnected = edges.some(edge => edge.sourceHandle === portId || edge.targetHandle === portId);
+    // Filtrar las aristas asociadas al puerto
+    const edgesToDelete = edges.filter(edge => edge.sourceHandle === portId || edge.targetHandle === portId);
     
-    if (isConnected) {
+    // Si hay conexiones, pedir confirmación y eliminarlas
+    if (edgesToDelete.length > 0) {
         const confirmation = window.confirm("Este puerto está conectado. ¿Estás seguro de que quieres eliminar el puerto y todas sus conexiones?");
+        
         if (!confirmation) {
             return;
         }
+        
+        setEdges((eds) => eds.filter(edge => !edgesToDelete.includes(edge)));
     }
 
-    setEdges((eds) => eds.filter(edge => edge.sourceHandle !== portId && edge.targetHandle !== portId));
-
+    // Luego, eliminar el puerto del nodo
     setNodes((nds) => nds.map(node => {
       if (node.id === nodeId) {
         const updatedPorts = node.data.ports.filter(p => p.id !== portId);
@@ -198,23 +265,23 @@ const App: React.FC = () => {
       }
       return node;
     }));
-  }, [setNodes, setEdges, edges]);
+    setSelectedPort(null); // Ocultar el panel de información si se borra el puerto
+  }, [setNodes, setEdges, edges, setSelectedPort]);
   
-  const handleDeleteConnection = useCallback((edgeId: string) => {
-      setEdges((eds) => eds.filter(e => e.id !== edgeId));
-  }, [setEdges]);
+  const handlePortClick = useCallback((portData: PortData) => {
+    setSelectedPort(portData);
+  }, []);
 
   const nodeTypes = useMemo(() => ({
     componentNode: (props: NodeProps<NodeData>) => (
       <ComponentNode
         {...props}
         onDeletePort={handleDeletePort}
-        onDeleteConnection={handleDeleteConnection}
+        onPortClick={handlePortClick}
         nodeColors={nodeColors}
-        edges={edges}
       />
     ),
-  }), [handleDeletePort, handleDeleteConnection, nodeColors, edges]);
+  }), [handleDeletePort, handlePortClick, nodeColors]);
 
   const handleGenerateCode = useCallback(() => {
     CodeGenerator.generateCodeAndDownload(nodes, edges);
@@ -324,6 +391,7 @@ const App: React.FC = () => {
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onNodeContextMenu={onNodeContextMenu}
+        onEdgesDelete={onEdgesDelete}
         fitView
         nodeTypes={nodeTypes}
       >
@@ -336,11 +404,21 @@ const App: React.FC = () => {
         <ContextMenu
           x={menu.x}
           y={menu.y}
-          onAddPort={handleAddPort}
+          onAddPort={(...args) => handleAddPort(menu.nodeId, ...args)}
+          onAddConjugatePort={handleAddConjugatePort}
           onRename={handleRenameComponent}
           onClose={() => setMenu(null)}
           dataTypes={dataTypes}
           onAssignNode={handleAssignNode}
+          handleAddDataType={handleAddDataType}
+          nodes={nodes}
+          nodeId={menu.nodeId}
+        />
+      )}
+      {selectedPort && (
+        <PortInfoPanel
+          port={selectedPort}
+          onClose={() => setSelectedPort(null)}
         />
       )}
     </div>
