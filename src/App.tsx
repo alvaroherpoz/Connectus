@@ -17,12 +17,13 @@ import type { Node, Edge, Connection, EdgeChange, BackgroundVariant, OnNodesChan
 import ComponentNode from './ComponentNode';
 import ContextMenu from './ContextMenu';
 import PortInfoPanel from './PortInfoPanel';
+import ComponentAttributesPanel from './ComponentAttributesPanel';
 import { CodeGenerator } from './CodeGenerator';
 
 const initialNodes: Node<NodeData>[] = [
-  { id: '1', type: 'componentNode', data: { name: 'ICUASW', ports: [], node: 'NodeA' }, position: { x: 250, y: 50 }, selectable: true, style: { zIndex: 1 } },
-  { id: '2', type: 'componentNode', data: { name: 'ccbkgtcexec', ports: [], node: 'NodeA' }, position: { x: 50, y: 200 }, selectable: true, style: { zIndex: 1 } },
-  { id: '3', type: 'componentNode', data: { name: 'cctm_channelctrl', ports: [], node: 'NodeB' }, position: { x: 450, y: 300 }, selectable: true, style: { zIndex: 1 } }
+  { id: '1', type: 'componentNode', data: { name: 'ICUASW', ports: [], node: 'NodeA', componentId: 1, maxMessages: 10, priority: 'EDROOMprioNormal', stackSize: 2048 }, position: { x: 250, y: 50 }, selectable: true, style: { zIndex: 1 } },
+  { id: '2', type: 'componentNode', data: { name: 'ccbkgtcexec', ports: [], node: 'NodeA', componentId: 2, maxMessages: 10, priority: 'EDROOMprioNormal', stackSize: 2048 }, position: { x: 50, y: 200 }, selectable: true, style: { zIndex: 1 } },
+  { id: '3', type: 'componentNode', data: { name: 'cctm_channelctrl', ports: [], node: 'NodeB', componentId: 3, maxMessages: 10, priority: 'EDROOMprioNormal', stackSize: 2048 }, position: { x: 450, y: 300 }, selectable: true, style: { zIndex: 1 } }
 ];
 const initialEdges: Edge[] = [];
 
@@ -39,25 +40,42 @@ const App: React.FC = () => {
   const [showToolsMenu, setShowToolsMenu] = useState(false);
   const [downloadFileName, setDownloadFileName] = useState('edroom_diagrama');
   const [selectedPort, setSelectedPort] = useState<PortData | null>(null);
+  const [selectedNodeToEdit, setSelectedNodeToEdit] = useState<Node<NodeData> | null>(null);
 
   const { getNodes, getEdges } = useReactFlow();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const onAddNode = useCallback(() => {
     const newId = nodeIdCounter.current.toString();
+    const existingComponentIds = nodes.map(node => node.data.componentId).sort((a, b) => a - b);
+    let newComponentId = 1;
+    for (let i = 0; i < existingComponentIds.length; i++) {
+        if (existingComponentIds[i] > newComponentId) {
+            break;
+        }
+        newComponentId++;
+    }
+
     const newNode: Node<NodeData> = {
       id: newId,
       type: 'componentNode',
-      data: { name: `Componente${newId}`, ports: [], node: '' },
+      data: { 
+          name: `Componente${newComponentId}`, 
+          ports: [], 
+          node: '',
+          componentId: newComponentId,
+          maxMessages: 10,
+          priority: 'EDROOMprioNormal',
+          stackSize: 2048
+      },
       position: { x: Math.random() * 250, y: Math.random() * 250 },
       selectable: true,
       style: { zIndex: 1 },
     };
     
     setNodes((nds) => nds.concat(newNode));
-    
     nodeIdCounter.current++;
-  }, [setNodes]);
+  }, [setNodes, nodes]);
 
   const onNodesChange: OnNodesChange = useCallback(
     (changes: NodeChange[]) => { 
@@ -73,7 +91,6 @@ const App: React.FC = () => {
   
   const onConnect = useCallback(
     (params: Connection) => {
-      // Elimina la conexión anterior inmediatamente, antes de cualquier validación
       setEdges((eds) => 
         eds.filter(
           (edge) => !(edge.sourceHandle === params.sourceHandle || edge.targetHandle === params.targetHandle)
@@ -154,9 +171,31 @@ const App: React.FC = () => {
       [setNodes, setMenu]
   );
   
+  const handleDeleteNode = useCallback((nodeId: string) => {
+    setNodes((nds) => nds.filter((node) => node.id !== nodeId));
+    setEdges((eds) => eds.filter((edge) => edge.source !== nodeId && edge.target !== nodeId));
+    setMenu(null);
+  }, [setNodes, setEdges]);
+  
+  const handleUpdateNodeAttributes = useCallback((nodeId: string, data: Partial<NodeData>) => {
+    setNodes(nds => nds.map(node => {
+      if (node.id === nodeId) {
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            ...data
+          }
+        };
+      }
+      return node;
+    }));
+    setSelectedNodeToEdit(null);
+  }, [setNodes]);
+
   const handleAddDataType = useCallback((newType: string) => {
     if (newType && !dataTypes.includes(newType)) {
-        setDataTypes((prevTypes) => [...prevTypes, newType]);
+      setDataTypes((prevTypes) => [...prevTypes, newType]);
     }
   }, [dataTypes, setDataTypes]);
 
@@ -243,21 +282,15 @@ const App: React.FC = () => {
   }, [menu, setNodes, nodeColors, setNodeColors]);
 
   const handleDeletePort = useCallback((nodeId: string, portId: string) => {
-    // Filtrar las aristas asociadas al puerto
     const edgesToDelete = edges.filter(edge => edge.sourceHandle === portId || edge.targetHandle === portId);
     
-    // Si hay conexiones, pedir confirmación y eliminarlas
     if (edgesToDelete.length > 0) {
-        const confirmation = window.confirm("Este puerto está conectado. ¿Estás seguro de que quieres eliminar el puerto y todas sus conexiones?");
-        
-        if (!confirmation) {
-            return;
-        }
-        
-        setEdges((eds) => eds.filter(edge => !edgesToDelete.includes(edge)));
+      const confirmation = window.confirm("Este puerto está conectado. ¿Estás seguro de que quieres eliminar el puerto y todas sus conexiones?");
+      if (!confirmation) {
+          return;
+      }
+      setEdges((eds) => eds.filter(edge => !edgesToDelete.includes(edge)));
     }
-
-    // Luego, eliminar el puerto del nodo
     setNodes((nds) => nds.map(node => {
       if (node.id === nodeId) {
         const updatedPorts = node.data.ports.filter(p => p.id !== portId);
@@ -265,7 +298,7 @@ const App: React.FC = () => {
       }
       return node;
     }));
-    setSelectedPort(null); // Ocultar el panel de información si se borra el puerto
+    setSelectedPort(null);
   }, [setNodes, setEdges, edges, setSelectedPort]);
   
   const handlePortClick = useCallback((portData: PortData) => {
@@ -408,6 +441,14 @@ const App: React.FC = () => {
           onAddConjugatePort={handleAddConjugatePort}
           onRename={handleRenameComponent}
           onClose={() => setMenu(null)}
+          onDeleteNode={handleDeleteNode}
+          onEditAttributes={() => {
+            const node = nodes.find(n => n.id === menu.nodeId);
+            if (node) {
+              setSelectedNodeToEdit(node);
+              setMenu(null);
+            }
+          }}
           dataTypes={dataTypes}
           onAssignNode={handleAssignNode}
           handleAddDataType={handleAddDataType}
@@ -420,6 +461,14 @@ const App: React.FC = () => {
           port={selectedPort}
           onClose={() => setSelectedPort(null)}
         />
+      )}
+      {selectedNodeToEdit && (
+          <ComponentAttributesPanel
+              nodeId={selectedNodeToEdit.id}
+              nodeData={selectedNodeToEdit.data}
+              onClose={() => setSelectedNodeToEdit(null)}
+              onUpdateNode={handleUpdateNodeAttributes}
+          />
       )}
     </div>
   );

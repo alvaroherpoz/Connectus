@@ -15,9 +15,11 @@ interface ContextMenuProps {
     handleAddDataType: (newType: string) => void;
     nodes: Node<NodeData>[];
     nodeId: string;
+    onDeleteNode: (nodeId: string) => void;
+    onEditAttributes: () => void;
 }
 
-const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, onAddPort, onAddConjugatePort, onRename, onClose, dataTypes, onAssignNode, handleAddDataType, nodes, nodeId }) => {
+const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, onAddPort, onAddConjugatePort, onRename, onClose, dataTypes, onAssignNode, handleAddDataType, nodes, nodeId, onDeleteNode, onEditAttributes }) => {
     const [view, setView] = useState<'main' | 'addPort' | 'rename' | 'assignNode' | 'generateConjugate'>('main');
     const [portName, setPortName] = useState('');
     const [portType, setPortType] = useState<'comunicacion' | 'tiempo' | 'interrupcion'>('comunicacion');
@@ -103,8 +105,8 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, onAddPort, onAddConjuga
                     setView('generateConjugate');
                 }
             }}>Generar Puerto Conjugado</button>
-            <button onClick={() => setView('rename')}>Renombrar Componente</button>
-            <button onClick={() => setView('assignNode')}>Asignar Nodo</button>
+            <button onClick={onEditAttributes}>Editar Atributos</button>
+            <button onClick={() => onDeleteNode(nodeId)}>Eliminar Componente</button>
         </>
     );
 
@@ -169,10 +171,10 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, onAddPort, onAddConjuga
                         {showNewDataTypeInput && (
                             <div className="add-data-type-container">
                                 <input
-                                  type="text"
-                                  placeholder="Nuevo Tipo de Dato"
-                                  value={newDataTypeName}
-                                  onChange={(e) => setNewDataTypeName(e.target.value)}
+                                    type="text"
+                                    placeholder="Nuevo Tipo de Dato"
+                                    value={newDataTypeName}
+                                    onChange={(e) => setNewDataTypeName(e.target.value)}
                                 />
                                 <button type="button" onClick={handleAddNewDataType}>Añadir Tipo</button>
                             </div>

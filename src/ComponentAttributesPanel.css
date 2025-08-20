@@ -1,0 +1,73 @@
+.attributes-panel-container {
+    background-color: #fff;
+    border: 1px solid #ddd;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+    padding: 1rem;
+    position: fixed; /* ¡Esta es la clave para que flote! */
+    z-index: 1000;
+    width: 300px;
+    max-height: 80vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.attributes-panel-header-draggable {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #eee;
+    margin-bottom: 1rem;
+    cursor: move;
+}
+
+/* Resto de estilos para botones, inputs, etc. */
+.attributes-panel-body .form-group {
+    margin-bottom: 1rem;
+    display: flex;
+    flex-direction: column;
+}
+
+.attributes-panel-body label {
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+}
+
+.attributes-panel-body input {
+    padding: 0.5rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+.attributes-panel-body .button-group {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.attributes-panel-body .button-group button {
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+.attributes-panel-body .button-group button:first-child {
+    background-color: #2a9d8f;
+    color: white;
+}
+
+.attributes-panel-body .button-group button:last-child {
+    background-color: #e76f51;
+    color: white;
+}
+.attributes-panel-body select {
+    padding: 0.5rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    width: 100%;
+}
