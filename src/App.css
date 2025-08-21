@@ -74,9 +74,28 @@
 .hidden-input {
   display: none;
 }
-
+.app-container {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: #fef5ed;
+}
 /* Z-index para asegurar que las líneas de React Flow se vean por encima de los nodos */
 /* Esto puede ser necesario si el zIndex en el nodo no es suficiente */
 .react-flow__edges {
     z-index: 1000; /* Un valor alto para garantizar que estén por encima */
+}
+.react-flow__node.componentNode {
+  padding: 0;
+  border: none;
+  border-radius: 5px; /* Aplicamos el radio de borde aquí */
+}
+
+/* Opcional: Estilo de tu componente interno si lo necesitas */
+.component-node {
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  overflow: hidden;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }

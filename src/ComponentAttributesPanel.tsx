@@ -6,7 +6,7 @@ interface ComponentAttributesPanelProps {
   nodeId: string;
   nodeData: NodeData;
   onClose: () => void;
-  onUpdateNode: (nodeId: string, data: Partial<NodeData>) => void;
+  onUpdateNode: (nodeId: string, data: Partial<NodeData>) => boolean; // Se ha modificado para que devuelva un booleano.
 }
 
 const ComponentAttributesPanel: React.FC<ComponentAttributesPanelProps> = ({
@@ -69,8 +69,10 @@ const ComponentAttributesPanel: React.FC<ComponentAttributesPanelProps> = ({
   }, [isDragging, handleMouseMove, handleMouseUp]);
 
   const handleSave = () => {
-    onUpdateNode(nodeId, localData);
-    onClose();
+    const success = onUpdateNode(nodeId, localData);
+    if (success) {
+      onClose();
+    }
   };
 
   return (

@@ -1,14 +1,10 @@
 /* src/ComponentNode.css */
 
 .component-node {
-  border: 1px solid #999;
-  border-radius: 8px;
-  background-color: white;
-  min-width: 150px;
-  box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.1);
-  font-family: Arial, sans-serif;
-  padding: 0;
-  overflow: hidden;
+  /* Elimina background-color y cualquier propiedad de fondo aquí */
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
 .component-node-header {
@@ -121,4 +117,10 @@
 
 .custom-handle.source.react-flow__handle {
   background-color: #ffc107;
+}
+.react-flow__node.componentNode {
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  overflow: hidden; /* Esto es importante para que el color no se salga de los bordes */
 }

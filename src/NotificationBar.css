@@ -1,0 +1,47 @@
+/* Notificación flotante */
+.notification-bar {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 10px 20px;
+    border-radius: 8px;
+    color: white;
+    font-weight: bold;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    z-index: 1000;
+    opacity: 0;
+    animation: fadeInOut 3s forwards;
+    pointer-events: none; /* Para que no bloquee clics */
+}
+
+.notification-bar.success {
+    background-color: #4CAF50; /* Verde */
+}
+
+.notification-bar.error {
+    background-color: #f44336; /* Rojo */
+}
+
+.notification-bar.info {
+    background-color: #2196F3; /* Azul */
+}
+
+@keyframes fadeInOut {
+    0% {
+        opacity: 0;
+        top: 0;
+    }
+    10% {
+        opacity: 1;
+        top: 20px;
+    }
+    90% {
+        opacity: 1;
+        top: 20px;
+    }
+    100% {
+        opacity: 0;
+        top: 0;
+    }
+}

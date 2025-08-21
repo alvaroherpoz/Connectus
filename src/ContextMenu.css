@@ -112,3 +112,9 @@
   font-size: 14px;
   text-align: center;
 }
+
+/* Estilo para hacer que el menú desplegable sea deslizable */
+#message-data-type {
+    max-height: 150px; /* Puedes ajustar esta altura a tu gusto */
+    overflow-y: auto;
+}

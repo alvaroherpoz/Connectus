@@ -8,19 +8,24 @@ interface ContextMenuProps {
     y: number;
     onAddPort: (name: string, type: 'comunicacion' | 'tiempo' | 'interrupcion', subtype: 'nominal' | 'conjugado' | undefined, messages: Message[], interruptHandler?: string) => void;
     onAddConjugatePort: (nodeId: string, nominalPortId: string) => void;
-    onRename: (newName: string) => void;
     onClose: () => void;
-    dataTypes: string[];
-    onAssignNode: (nodeName: string) => void;
     handleAddDataType: (newType: string) => void;
     nodes: Node<NodeData>[];
     nodeId: string;
     onDeleteNode: (nodeId: string) => void;
     onEditAttributes: () => void;
+    dataTypes: string[];
 }
 
-const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, onAddPort, onAddConjugatePort, onRename, onClose, dataTypes, onAssignNode, handleAddDataType, nodes, nodeId, onDeleteNode, onEditAttributes }) => {
-    const [view, setView] = useState<'main' | 'addPort' | 'rename' | 'assignNode' | 'generateConjugate'>('main');
+const fixedDataTypesList = [
+    'CDEventList', 'CDRecovAction', 'CDSensorTMBufferStatus', 'CDTCDescriptor', 'CDTMList',
+    'CDTMMemory', 'Pr_Time', 'TEDROOMBool', 'TEDROOMByte', 'TEDROOMDouble', 'TEDROOMFloat', 'TEDROOMInt8',
+    'TEDROOMInt16', 'TEDROOMInt32', 'TEDROOMInt64', 'TEDROOMUInt8', 'TEDROOMUInt16', 'TEDROOMUInt32',
+    'TEDROOMUInt64', 'TEDROOMWord16', 'TEDROOMWord32', 'TEDROOMWord64'
+];
+
+const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, onAddPort, onAddConjugatePort, onClose, handleAddDataType, nodes, nodeId, onDeleteNode, onEditAttributes, dataTypes }) => {
+    const [view, setView] = useState<'main' | 'addPort' | 'generateConjugate'>('main');
     const [portName, setPortName] = useState('');
     const [portType, setPortType] = useState<'comunicacion' | 'tiempo' | 'interrupcion'>('comunicacion');
     const [portSubtype, setPortSubtype] = useState<'nominal' | 'conjugado' | undefined>('nominal'); // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -29,11 +34,10 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, onAddPort, onAddConjuga
     const [messageDataType, setMessageDataType] = useState('');
     const [messageDirection, setMessageDirection] = useState<'entrada' | 'salida'>('entrada');
     const [interruptHandler, setInterruptHandler] = useState('');
-    const [newName, setNewName] = useState('');
-    const [assignNodeName, setAssignNodeName] = useState('');
     const [selectedNominalPort, setSelectedNominalPort] = useState<string | null>(null);
     const [newDataTypeName, setNewDataTypeName] = useState('');
     const [showNewDataTypeInput, setShowNewDataTypeInput] = useState(false);
+    const [errorMessage, setErrorMessage] = useState('');
 
     const handleAddMessage = useCallback(() => {
         if (messageSignal && messageDataType) {
@@ -44,68 +48,73 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, onAddPort, onAddConjuga
     }, [messageSignal, messageDataType, messageDirection]);
 
     const handleRemoveMessage = useCallback((index: number) => {
-      setMessages((prevMessages) => prevMessages.filter((_, i) => i !== index));
+        setMessages((prevMessages) => prevMessages.filter((_, i) => i !== index));
     }, []);
 
     const handleAddNewDataType = useCallback(() => {
-      if (newDataTypeName.trim()) {
-        handleAddDataType(newDataTypeName.trim());
-        setMessageDataType(newDataTypeName.trim());
-        setNewDataTypeName('');
-        setShowNewDataTypeInput(false);
-      }
+        if (newDataTypeName.trim()) {
+            handleAddDataType(newDataTypeName.trim());
+            setMessageDataType(newDataTypeName.trim());
+            setNewDataTypeName('');
+            setShowNewDataTypeInput(false);
+        }
     }, [newDataTypeName, handleAddDataType, setMessageDataType]);
 
     const handleDataTypeChange = useCallback((e: ChangeEvent<HTMLSelectElement>) => {
-      const selectedType = e.target.value;
-      if (selectedType === 'other') {
-        setShowNewDataTypeInput(true);
-        setMessageDataType('');
-      } else {
-        setShowNewDataTypeInput(false);
-        setMessageDataType(selectedType);
-      }
+        const selectedType = e.target.value;
+        if (selectedType === 'other') {
+            setShowNewDataTypeInput(true);
+            setMessageDataType('');
+        } else {
+            setShowNewDataTypeInput(false);
+            setMessageDataType(selectedType);
+        }
     }, []);
 
     const handleSubmitPort = useCallback((e: FormEvent) => {
         e.preventDefault();
+        const currentComponent = nodes.find(node => node.id === nodeId);
+        if (currentComponent?.data.ports.some(p => p.name === portName)) {
+            setErrorMessage(`Ya existe un puerto con el nombre "${portName}".`);
+            return;
+        }
         onAddPort(portName, portType, portSubtype, messages, interruptHandler);
         onClose();
-    }, [onAddPort, portName, portType, portSubtype, messages, interruptHandler, onClose]);
-    
+    }, [onAddPort, portName, portType, portSubtype, messages, interruptHandler, onClose, nodes, nodeId]);
+
     const handleGenerateConjugate = useCallback(() => {
-        if (selectedNominalPort) {
-            onAddConjugatePort(nodeId, selectedNominalPort);
-            onClose();
+        if (!selectedNominalPort) {
+            setErrorMessage('Por favor, selecciona un puerto nominal.');
+            return;
         }
-    }, [onAddConjugatePort, nodeId, selectedNominalPort, onClose]);
 
-    const handleSubmitRename = useCallback((e: FormEvent) => {
-        e.preventDefault();
-        onRename(newName);
-        onClose();
-    }, [onRename, newName, onClose]);
+        const currentComponent = nodes.find(node => node.id === nodeId);
+        const nominalPort = nodes.flatMap(node => node.data.ports).find(p => p.id === selectedNominalPort);
+        
+        if (currentComponent?.data.ports.some(p => p.name === nominalPort?.name)) {
+            setErrorMessage(`Ya existe un puerto con el nombre "${nominalPort?.name}" en este componente.`);
+            return;
+        }
 
-    const handleSubmitAssignNode = useCallback((e: FormEvent) => {
-        e.preventDefault();
-        onAssignNode(assignNodeName);
+        onAddConjugatePort(nodeId, selectedNominalPort);
         onClose();
-    }, [onAssignNode, assignNodeName, onClose]);
+    }, [onAddConjugatePort, nodeId, selectedNominalPort, onClose, nodes]);
 
     const renderMainView = () => (
         <>
-            <button onClick={() => setView('addPort')}>Añadir Puerto</button>
+            <button onClick={() => { setErrorMessage(''); setView('addPort'); }}>Añadir Puerto</button>
             <button onClick={() => {
                 const nominalPorts = nodes.flatMap(node =>
                     node.data.ports.filter(port => port.type === 'comunicacion' && port.subtype === 'nominal')
                 );
                 if (nominalPorts.length === 0) {
-                    alert('No hay puertos nominales para generar un puerto conjugado.');
+                    setErrorMessage('No hay puertos nominales para generar un puerto conjugado.');
                 } else {
+                    setErrorMessage('');
                     setView('generateConjugate');
                 }
             }}>Generar Puerto Conjugado</button>
-            <button onClick={onEditAttributes}>Editar Atributos</button>
+            <button onClick={() => { setErrorMessage(''); onEditAttributes(); }}>Editar Atributos</button>
             <button onClick={() => onDeleteNode(nodeId)}>Eliminar Componente</button>
         </>
     );
@@ -114,7 +123,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, onAddPort, onAddConjuga
         <form onSubmit={handleSubmitPort}>
             <label>
                 Nombre del Puerto:
-                <input type="text" value={portName} onChange={(e: ChangeEvent<HTMLInputElement>) => setPortName(e.target.value)} required />
+                <input type="text" value={portName} onChange={(e: ChangeEvent<HTMLInputElement>) => { setPortName(e.target.value); setErrorMessage(''); }} required />
             </label>
             <label htmlFor="port-type">
                 Tipo de Puerto:
@@ -157,6 +166,10 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, onAddPort, onAddConjuga
                             <select id="message-data-type" value={messageDataType} onChange={handleDataTypeChange} title="Tipo de Dato">
                                 <option value="">Tipo de Dato</option>
                                 <option value="void">void (sin dato)</option>
+                                {fixedDataTypesList.map((dt) => (
+                                    <option key={dt} value={dt}>{dt}</option>
+                                ))}
+                                {/* Usa la prop dataTypes aquí */}
                                 {dataTypes.map((dt) => (
                                     <option key={dt} value={dt}>{dt}</option>
                                 ))}
@@ -189,12 +202,12 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, onAddPort, onAddConjuga
                 </label>
             )}
             <button type="submit">Añadir Puerto</button>
-            <button type="button" onClick={() => setView('main')}>Volver</button>
+            <button type="button" onClick={() => { setErrorMessage(''); setView('main'); }}>Volver</button>
         </form>
     );
 
     const renderGenerateConjugateView = () => {
-        const nominalPorts = nodes.flatMap(node => 
+        const nominalPorts = nodes.flatMap(node =>
             node.data.ports
                 .filter(port => port.type === 'comunicacion' && port.subtype === 'nominal')
                 .map(port => ({ ...port, componentName: node.data.name }))
@@ -203,7 +216,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, onAddPort, onAddConjuga
         return (
             <div>
                 <h4>Seleccionar Puerto Nominal</h4>
-                <select onChange={(e) => setSelectedNominalPort(e.target.value)} value={selectedNominalPort || ""} title="Seleccionar puerto nominal">
+                <select onChange={(e) => { setSelectedNominalPort(e.target.value); setErrorMessage(''); }} value={selectedNominalPort || ""} title="Seleccionar puerto nominal">
                     <option value="">Selecciona un puerto...</option>
                     {nominalPorts.map(port => (
                         <option key={port.id} value={port.id}>
@@ -212,41 +225,18 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, onAddPort, onAddConjuga
                     ))}
                 </select>
                 <button onClick={handleGenerateConjugate} disabled={!selectedNominalPort}>Generar</button>
-                <button onClick={() => setView('main')}>Volver</button>
+                <button onClick={() => { setErrorMessage(''); setView('main'); }}>Volver</button>
             </div>
         );
     };
-
-    const renderRenameView = () => (
-        <form onSubmit={handleSubmitRename}>
-            <label htmlFor="new-name">
-                Nuevo Nombre:
-                <input id="new-name" type="text" value={newName} onChange={(e: ChangeEvent<HTMLInputElement>) => setNewName(e.target.value)} required />
-            </label>
-            <button type="submit">Renombrar</button>
-            <button type="button" onClick={() => setView('main')}>Volver</button>
-        </form>
-    );
-
-    const renderAssignNodeView = () => (
-        <form onSubmit={handleSubmitAssignNode}>
-            <label htmlFor="assign-node-name">
-                Asignar al Nodo:
-                <input id="assign-node-name" type="text" value={assignNodeName} onChange={(e: ChangeEvent<HTMLInputElement>) => setAssignNodeName(e.target.value)} required />
-            </label>
-            <button type="submit">Asignar</button>
-            <button type="button" onClick={() => setView('main')}>Volver</button>
-        </form>
-    );
 
     return (
         <div className="context-menu" style={{ top: y, left: x }}>
             {view === 'main' && renderMainView()}
             {view === 'addPort' && renderAddPortView()}
-            {view === 'rename' && renderRenameView()}
-            {view === 'assignNode' && renderAssignNodeView()}
             {view === 'generateConjugate' && renderGenerateConjugateView()}
-            <button className="bottom-close-button" onClick={onClose}>Cerrar</button>
+            {errorMessage && <div className="context-menu-error-message">{errorMessage}</div>}
+            <button className="bottom-close-button" onClick={() => { setErrorMessage(''); onClose(); }}>Cerrar</button>
         </div>
     );
 };
