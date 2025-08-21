@@ -71,13 +71,17 @@ const App: React.FC = () => {
         newComponentId++;
     }
 
+    const defaultNodeName = `Nodo ${newComponentId}`;
+    const hue = Math.floor(Math.random() * 360);
+    const newColor = `hsl(${hue}, 70%, 85%)`;
+
     const newNode: Node<NodeData> = {
       id: newId,
       type: 'componentNode',
       data: {
           name: `Componente${newComponentId}`,
           ports: [],
-          node: '',
+          node: defaultNodeName, // Uso de la variable aquí
           componentId: newComponentId,
           maxMessages: 10,
           priority: 'EDROOMprioNormal',
@@ -85,7 +89,7 @@ const App: React.FC = () => {
       },
       position: { x: Math.random() * 250, y: Math.random() * 250 },
       selectable: true,
-      style: { zIndex: 1 },
+      style: { zIndex: 1, backgroundColor: newColor },
     };
 
     setNodes((nds) => nds.concat(newNode));
@@ -264,7 +268,8 @@ const App: React.FC = () => {
 
     setNotification({ message: 'Atributos del componente actualizados con éxito.', type: 'success' });
     return true;
-}, [setNodes, nodes, setNotification, nodeColors]);
+    
+  }, [setNodes, nodes, setNotification, nodeColors]);
 
   const handleAddConjugatePort = useCallback((nodeId: string, nominalPortId: string) => {
     let nominalPort: PortData | undefined;
@@ -339,15 +344,14 @@ const App: React.FC = () => {
   }, []);
 
   const nodeTypes = useMemo(() => ({
-  componentNode: (props: NodeProps<NodeData>) => (
-    <ComponentNode
-      {...props}
-      onDeletePort={handleDeletePort}
-      onPortClick={handlePortClick}
-      // La prop 'nodeColors' ya no es necesaria, así que la eliminamos
-    />
-  ),
-}), [handleDeletePort, handlePortClick]);
+    componentNode: (props: NodeProps<NodeData>) => (
+      <ComponentNode
+        {...props}
+        onDeletePort={handleDeletePort}
+        onPortClick={handlePortClick}
+      />
+    ),
+  }), [handleDeletePort, handlePortClick]);
 
   const handleGenerateCode = useCallback(() => {
     CodeGenerator.generateCodeAndDownload(nodes, edges);
@@ -385,16 +389,25 @@ const App: React.FC = () => {
         const newColors: Record<string, string> = {};
         loadedNodes.forEach((node: Node<NodeData>) => {
             if (node.data.node) {
-              if (node.style && node.style.backgroundColor) {
-                newColors[node.data.node] = node.style.backgroundColor;
-              } else if (!newColors[node.data.node]) {
-                const hue = Math.floor(Math.random() * 360);
-                newColors[node.data.node] = `hsl(${hue}, 70%, 85%)`;
-              }
+              const color = node.style?.backgroundColor || `hsl(${Math.floor(Math.random() * 360)}, 70%, 85%)`;
+              newColors[node.data.node] = color;
             }
         });
 
-        setNodes(loadedNodes);
+        const updatedLoadedNodes = loadedNodes.map((node: Node<NodeData>) => {
+            if (node.data.node && newColors[node.data.node]) {
+                return {
+                    ...node,
+                    style: {
+                        ...node.style,
+                        backgroundColor: newColors[node.data.node],
+                    },
+                };
+            }
+            return node;
+        });
+
+        setNodes(updatedLoadedNodes);
         setEdges(loadedEdges);
         setNodeColors(newColors);
 
