@@ -354,7 +354,7 @@ const App: React.FC = () => {
   }), [handleDeletePort, handlePortClick]);
 
   const handleGenerateCode = useCallback(() => {
-    CodeGenerator.generateCodeAndDownload(nodes, edges);
+    CodeGenerator.generateCodeAndDownload(nodes);
     setNotification({ message: 'Código generado y listo para descargar.', type: 'success' });
     setShowToolsMenu(false);
   }, [nodes, edges, setNotification]);
