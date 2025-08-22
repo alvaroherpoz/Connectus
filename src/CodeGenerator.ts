@@ -2,28 +2,25 @@
 
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
-import type { Node, NodeData } from './types';
+import type { Node, NodeData, Edge } from './types';
 import { icuasw_mmesp_project_template } from './code_templates/main/icuasw_mmesp_project_template';
+import { edroomdeployment_h_template } from './code_templates/deployment/edroomdeployment_h_template';
 
 export class CodeGenerator {
     /**
      * Genera un único archivo ZIP que contiene una carpeta por cada nodo lógico.
      * @param nodes Los nodos del diagrama.
+     * @param edges Las conexiones entre los nodos.
      */
-    public static async generateCodeAndDownload(nodes: Node<NodeData>[]): Promise<void> {
+    public static async generateCodeAndDownload(nodes: Node<NodeData>[], edges: Edge[]): Promise<void> {
 
         const zip = new JSZip();
 
-        // Obtener nombres de nodos únicos y válidos del diagrama.
         const uniqueNodeNames = Array.from(new Set(nodes.map(c => c.data.node).filter(Boolean)));
-
-        // Si no hay nodos válidos, se genera un solo proyecto por defecto.
         const nodesToGenerate = uniqueNodeNames.length > 0 ? uniqueNodeNames : ['default_node'];
 
-        // Generar una carpeta por cada nodo lógico dentro del único ZIP.
         for (const nodeToGenerate of nodesToGenerate) {
 
-            // Se fuerza el tipo a `string` para satisfacer al compilador.
             const nodeFolder = zip.folder(nodeToGenerate as string);
 
             if (nodeFolder) {
@@ -34,7 +31,8 @@ export class CodeGenerator {
                 if (glueFolder) {
                     const glueIncludeFolder = glueFolder.folder("include/edroom_glue");
                     if (glueIncludeFolder) {
-                        glueIncludeFolder.file("edroomdeployment.h", "");
+                        const deploymentHeaderContent = edroomdeployment_h_template.generateHeaderFileContent(nodes, nodeToGenerate as string, edges);
+                        glueIncludeFolder.file("edroomdeployment.h", deploymentHeaderContent);
                     }
 
                     const glueSrcFolder = glueFolder.folder("src");
@@ -45,7 +43,6 @@ export class CodeGenerator {
             }
         }
 
-        // Descargar el único archivo ZIP.
         await zip.generateAsync({ type: "blob" })
             .then(content => {
                 saveAs(content, `edroom_projects_all.zip`);
