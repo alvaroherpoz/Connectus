@@ -7,21 +7,27 @@ export class edroomdeployment_h_template {
 
         // Filtra los nodos y conexiones que pertenecen al nodo local
         const localNodes = nodes.filter(n => n.data.node === localNodeName);
-        const localConnections = edges.filter(e => {
+        const allConnections = edges.filter(e => {
             const sourceNode = nodes.find(n => n.id === e.source);
             const targetNode = nodes.find(n => n.id === e.target);
-            return sourceNode?.data.node === localNodeName && targetNode?.data.node === localNodeName;
+            return sourceNode?.data.node === localNodeName || targetNode?.data.node === localNodeName;
         });
 
-        // 1. Generar inclusiones de cabeceras
-        const includes = localNodes.map(c => {
-            const name = c.data.name.replace(/\s/g, '');
-            return `#include <public/${name.toLowerCase()}_iface_v1.h>`;
+        // 1. Generar inclusiones de cabeceras para TODOS los componentes
+        const includes = nodes.map(c => {
+            const name = c.data.name.replace(/\s/g, '').toLowerCase();
+            const componentClassPrefix = this.getComponentClassPrefix(c, localNodeName);
+            
+            if (c.data.name === 'ICUASW') {
+                return `#include <public/${name}_iface_v1.h>`;
+            } else {
+                return `#include <public/${componentClassPrefix.toLowerCase()}${name}_iface_v1.h>`;
+            }
         }).join('\n');
 
         // 2. Declaraciones de memoria de componentes
-        const componentMemoryDeclarations = localNodes.map(c => {
-            const instanceName = c.data.name.toLowerCase().replace(/\s/g, '');
+        const componentMemoryDeclarations = nodes.map(c => {
+            const instanceName = this.getInstanceName(c, localNodeName);
             const maxMessages = c.data.maxMessages;
             const maxQueueNodes = c.data.maxMessages; 
             
@@ -35,9 +41,9 @@ export class edroomdeployment_h_template {
         }).join('');
 
         // 3. Miembros de la clase CEDROOMSystemMemory
-        const componentMemoryMembers = localNodes.map(c => {
-            const instanceName = c.data.name.toLowerCase().replace(/\s/g, '');
-            const componentClass = this.getComponentClass(c);
+        const componentMemoryMembers = nodes.map(c => {
+            const instanceName = this.getInstanceName(c, localNodeName);
+            const componentClass = this.getComponentClass(c, localNodeName);
             return `    ${componentClass}::CEDROOMMemory ${instanceName}Memory;`;
         }).join('\n');
 
@@ -52,11 +58,11 @@ export class edroomdeployment_h_template {
         }).join('\n');
 
         // Documentación de los parámetros del traductor de señales
-        connectFunctionDoc += localConnections.map(conn => {
+        connectFunctionDoc += allConnections.map(conn => {
             const sourceNode = nodes.find(n => n.id === conn.source);
             const targetNode = nodes.find(n => n.id === conn.target);
-            const sourceName = sourceNode?.data.name.toLowerCase().replace(/\s/g, '');
-            const targetName = targetNode?.data.name.toLowerCase().replace(/\s/g, '');
+            const sourceName = this.getInstanceName(sourceNode!, localNodeName);
+            const targetName = this.getInstanceName(targetNode!, localNodeName);
 
             return `\
     * \\param ${sourceName}To${targetName}SignalTranslator component${sourceNode?.data.componentId} to component${targetNode?.data.componentId} signal translator
@@ -64,11 +70,11 @@ export class edroomdeployment_h_template {
         }).join('\n');
         
         // 5. Firma de la función Connect
-        const connectFunctionSignature = localConnections.map(conn => {
+        const connectFunctionSignature = allConnections.map(conn => {
             const sourceNode = nodes.find(n => n.id === conn.source);
             const targetNode = nodes.find(n => n.id === conn.target);
-            const sourceName = sourceNode?.data.name.toLowerCase().replace(/\s/g, '');
-            const targetName = targetNode?.data.name.toLowerCase().replace(/\s/g, '');
+            const sourceName = this.getInstanceName(sourceNode!, localNodeName);
+            const targetName = this.getInstanceName(targetNode!, localNodeName);
 
             return `
                  ,CEDROOMInterface & interface${sourceName}
@@ -78,7 +84,7 @@ export class edroomdeployment_h_template {
         }).join('');
 
         // 6. Generar las funciones de conversión de señales
-        const signalConversions = localConnections.map(conn => {
+        const signalConversions = allConnections.map(conn => {
             const sourceNode = nodes.find(n => n.id === conn.source);
             const targetNode = nodes.find(n => n.id === conn.target);
             
@@ -100,37 +106,37 @@ export class edroomdeployment_h_template {
         }).join('\n');
         
         // 7. Miembros de CEDROOMSystemCommSAP
-        const systemCommSAPMembers = localNodes.map(c => {
-            const componentClass = this.getComponentClass(c);
-            const instanceName = c.data.name.toLowerCase().replace(/\s/g, '');
+        const systemCommSAPMembers = nodes.map(c => {
+            const componentClass = this.getComponentClass(c, localNodeName);
+            const instanceName = this.getInstanceName(c, localNodeName);
             return `    static ${componentClass}   * mp_${instanceName};`;
         }).join('\n');
 
         // 8. Parámetros para SetComponents
-        const setComponentsParameters = localNodes.map(c => {
-            const componentClass = this.getComponentClass(c);
-            const instanceName = c.data.name.toLowerCase().replace(/\s/g, '');
+        const setComponentsParameters = nodes.map(c => {
+            const componentClass = this.getComponentClass(c, localNodeName);
+            const instanceName = this.getInstanceName(c, localNodeName);
             return `${componentClass}   *p_${instanceName}`;
         }).join(',\n                             ');
         
         // 9. Miembros de CEDROOMSystemDeployment
-        const systemDeploymentMembers = localNodes.map(c => {
-            const componentClass = this.getComponentClass(c);
-            const instanceName = c.data.name.toLowerCase().replace(/\s/g, '');
+        const systemDeploymentMembers = nodes.map(c => {
+            const componentClass = this.getComponentClass(c, localNodeName);
+            const instanceName = this.getInstanceName(c, localNodeName);
             return `    ${componentClass}    * mp_${instanceName};`;
         }).join('\n');
         
         // 10. Parámetros para Deployment Configuration
-        const deploymentConfigParameters = localNodes.map(c => {
-            const componentClass = this.getComponentClass(c);
-            const instanceName = c.data.name.toLowerCase().replace(/\s/g, '');
+        const deploymentConfigParameters = nodes.map(c => {
+            const componentClass = this.getComponentClass(c, localNodeName);
+            const instanceName = this.getInstanceName(c, localNodeName);
             return `${componentClass}    *p_${instanceName}`;
         }).join(',\n                             ');
 
         // 11. Funciones GetMemory
-        const getMemoryFunctions = localNodes.map(c => {
-            const componentClass = this.getComponentClass(c);
-            const instanceName = c.data.name.toLowerCase().replace(/\s/g, '');
+        const getMemoryFunctions = nodes.map(c => {
+            const componentClass = this.getComponentClass(c, localNodeName);
+            const instanceName = this.getInstanceName(c, localNodeName);
             return `    ${componentClass}::CEDROOMMemory       * Get${instanceName}Memory(){return &systemMemory.${instanceName}Memory;}`;
         }).join('\n');
 
@@ -324,14 +330,32 @@ ${getMemoryFunctions}
     
     // --- Funciones auxiliares para la lógica de la plantilla ---
     
-    private static getComponentClass(node: Node<NodeData>): string {
+    private static getInstanceName(node: Node<NodeData>, localNodeName: string): string {
+        let instanceName = node.data.name.toLowerCase().replace(/\s/g, '');
+        if (node.data.node !== localNodeName) {
+            instanceName = `r${instanceName}`;
+        }
+        return instanceName;
+    }
+    
+    private static getComponentClass(node: Node<NodeData>, localNodeName: string): string {
         const componentType = node.data.name;
         if (componentType === 'ICUASW') {
             return 'ICUASW';
-        } else if (node.data.node === 'default_node') {
+        } else if (node.data.node === localNodeName) {
             return `CC${componentType.replace(/\s/g, '')}`;
         } else {
             return `RCC${componentType.replace(/\s/g, '')}`;
+        }
+    }
+    
+    private static getComponentClassPrefix(node: Node<NodeData>, localNodeName: string): string {
+        if (node.data.name === 'ICUASW') {
+            return '';
+        } else if (node.data.node === localNodeName) {
+            return 'cc';
+        } else {
+            return 'rcc';
         }
     }
     
