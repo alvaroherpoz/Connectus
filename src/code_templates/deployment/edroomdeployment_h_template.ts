@@ -42,12 +42,11 @@ export class edroomdeployment_h_template {
             return `    ${componentClass}::CEDROOMMemory ${instanceName}Memory;`;
         }).join('\n');
         
-        // Filtra las conexiones que tienen al componente Top como fuente o destino
+        // Filtrar las conexiones que tienen al componente Top como fuente o destino
         const topLocalConnections = allConnections.filter(conn => {
             const sourceNode = nodes.find(n => n.id === conn.source);
             const targetNode = nodes.find(n => n.id === conn.target);
             
-            // Check if one node is the local Top and the other is any other component (local or remote)
             const isSourceTop = sourceNode?.data.isTop && sourceNode.data.node === localNodeName;
             const isTargetTop = targetNode?.data.isTop && targetNode.data.node === localNodeName;
             
@@ -63,55 +62,50 @@ export class edroomdeployment_h_template {
             return !(isSourceTop || isTargetTop);
         });
         
-        // 4. Documentación de la función Connect
-        let connectFunctionDoc = "";
+        // 4. Generar la función Connect y su documentación para cada conexión del componente Top
+        let connectSection = '';
+        if (topLocalConnections.length > 0) {
+            connectSection = topLocalConnections.map(conn => {
+                const sourceNode = nodes.find(n => n.id === conn.source)!;
+                const targetNode = nodes.find(n => n.id === conn.target)!;
+                
+                const sourceName = this.getInstanceName(sourceNode, localNodeName);
+                const targetName = this.getInstanceName(targetNode, localNodeName);
 
-        // Collect all unique nodes connected to the local Top component
-        const connectedNodes = new Set<Node<NodeData>>();
-        topLocalConnections.forEach(conn => {
-            const sourceNode = nodes.find(n => n.id === conn.source);
-            const targetNode = nodes.find(n => n.id === conn.target);
-            if (sourceNode) connectedNodes.add(sourceNode);
-            if (targetNode) connectedNodes.add(targetNode);
-        });
-
-        // Documentación de los parámetros de interfaz
-        connectFunctionDoc += Array.from(connectedNodes).map(c => {
-            const name = this.getInstanceName(c, localNodeName);
-            return `\
-    * \\param interface${name} reference to component ${c.data.componentId} interface`;
-        }).join('\n');
-
-        // Documentación de los parámetros del traductor de señales
-        connectFunctionDoc += topLocalConnections.map(conn => {
-            const sourceNode = nodes.find(n => n.id === conn.source);
-            const targetNode = nodes.find(n => n.id === conn.target);
-            const sourceName = this.getInstanceName(sourceNode!, localNodeName);
-            const targetName = this.getInstanceName(targetNode!, localNodeName);
-
-            return `\
-    * \\param ${sourceName}To${targetName}SignalTranslator component${sourceNode?.data.componentId} to component${targetNode?.data.componentId} signal translator
-    * \\param ${targetName}To${sourceName}SignalTranslator component${targetNode?.data.componentId} to component${sourceNode?.data.componentId} signal translator`;
-        }).join('\n');
-        
-        // 5. Firma de la función Connect
-        let connectInterfaceSignature = Array.from(connectedNodes).map(c => {
-            const name = this.getInstanceName(c, localNodeName);
-            return `,CEDROOMInterface & interface${name}`;
-        }).join('');
-        
-        const connectSignalTranslatorSignature = topLocalConnections.map(conn => {
-            const sourceNode = nodes.find(n => n.id === conn.source);
-            const targetNode = nodes.find(n => n.id === conn.target);
-            const sourceName = this.getInstanceName(sourceNode!, localNodeName);
-            const targetName = this.getInstanceName(targetNode!, localNodeName);
-
-            return `
+                // Determinar qué nodo es el Top y cuál es el otro
+                const topNode = sourceNode.data.isTop ? sourceNode : targetNode;
+                const otherNode = sourceNode.data.isTop ? targetNode : sourceNode;
+                const topName = this.getInstanceName(topNode, localNodeName);
+                const otherName = this.getInstanceName(otherNode, localNodeName);
+                
+                // Documentación de los parámetros
+                const docParams = `\
+    * \\param interface${topName} reference to component ${topNode.data.componentId} interface
+    * \\param interface${otherName} reference to component ${otherNode.data.componentId} interface
+    * \\param ${sourceName}To${targetName}SignalTranslator component${sourceNode.data.componentId} to component${targetNode.data.componentId} signal translator
+    * \\param ${targetName}To${sourceName}SignalTranslator component${targetNode.data.componentId} to component${sourceNode.data.componentId} signal translator
+    * \\param connection reference to the object that handles the connection`;
+                
+                // Firma de la función
+                const signatureParams = `
+                 CEDROOMInterface & interface${topName}
+                 ,CEDROOMInterface & interface${otherName}
+                 ,CEDROOMRemoteConnection &connection
                  ,TEDROOMSignal  (${sourceName}To${targetName}SignalTranslator) (TEDROOMSignal)
                  ,TEDROOMSignal  (${targetName}To${sourceName}SignalTranslator) (TEDROOMSignal)`;
-        }).join('');
 
-        // 6. Generar las funciones de conversión de señales
+                return `
+    /*!
+    * \\brief Connect the components interfaces
+${docParams}
+    */
+    void Connect(
+${signatureParams});
+`;
+            }).join('\n');
+        }
+        
+        // 5. Generar las funciones de conversión de señales
         this.resetPortCounter();
         const signalConversions = nonTopConnections.map(conn => {
             const sourceNode = nodes.find(n => n.id === conn.source);
@@ -134,35 +128,35 @@ export class edroomdeployment_h_template {
 `;
         }).join('\n');
         
-        // 7. Miembros de CEDROOMSystemCommSAP
+        // 6. Miembros de CEDROOMSystemCommSAP
         const systemCommSAPMembers = nodes.map(c => {
             const componentClass = this.getComponentClass(c, localNodeName);
             const instanceName = this.getInstanceName(c, localNodeName);
             return `     static ${componentClass}  * mp_${instanceName};`;
         }).join('\n');
 
-        // 8. Parámetros para SetComponents
+        // 7. Parámetros para SetComponents
         const setComponentsParameters = nodes.map(c => {
             const componentClass = this.getComponentClass(c, localNodeName);
             const instanceName = this.getInstanceName(c, localNodeName);
             return `${componentClass}  *p_${instanceName}`;
         }).join(',\n                         ');
         
-        // 9. Miembros de CEDROOMSystemDeployment
+        // 8. Miembros de CEDROOMSystemDeployment
         const systemDeploymentMembers = nodes.map(c => {
             const componentClass = this.getComponentClass(c, localNodeName);
             const instanceName = this.getInstanceName(c, localNodeName);
             return `    ${componentClass}    * mp_${instanceName};`;
         }).join('\n');
         
-        // 10. Parámetros para Deployment Configuration
+        // 9. Parámetros para Deployment Configuration
         const deploymentConfigParameters = nodes.map(c => {
             const componentClass = this.getComponentClass(c, localNodeName);
             const instanceName = this.getInstanceName(c, localNodeName);
             return `${componentClass}    *p_${instanceName}`;
         }).join(',\n                         ');
 
-        // 11. Funciones GetMemory
+        // 10. Funciones GetMemory
         const getMemoryFunctions = nodes.map(c => {
             const componentClass = this.getComponentClass(c, localNodeName);
             const instanceName = this.getInstanceName(c, localNodeName);
@@ -261,16 +255,7 @@ public:
                              , CEDROOMInterface & interface
                              , CEDROOMComponent* pComponent);
 
-
-    /*!
-    * \\brief Connect the components interfaces
-${connectFunctionDoc}
-    * \\param connection reference to the object that handles the connection
-    */
-    void Connect(
-                 ${connectInterfaceSignature}
-                 ,CEDROOMRemoteConnection &connection
-                 ${connectSignalTranslatorSignature});
+${connectSection}
 
 
 };
