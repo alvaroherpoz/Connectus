@@ -9,7 +9,7 @@ import type {
   NodeChange as RFNodeChange
 } from 'reactflow';
 
-export type ComponentPriority = 'EDROOMprioURGENT' | 'EDROOMprioVeryHigh' | 'EDROOMprioHigh' | 'EDROOMprioNormal' | 'EDROOMprioLow' | 'EDROOMprioVeryLow' | 'EDROOMprioMINIMUM' | 'EDROOMprioIDLE';
+export type ComponentPriority = 'EDROOMprioURGENT' | 'EDROOMprioVeryHigh' | 'EDROOMprioHigh' | 'EDROOMprioNormal' | 'EDROOMprioLow' | 'EDROOMprioVeryLow' | 'EDROOMprioIDLE' | 'EDROOMprioMINIMUM';
 
 export interface Message {
   signal: string;
@@ -34,6 +34,7 @@ export interface NodeData {
   maxMessages: number;
   priority: ComponentPriority;
   stackSize: number;
+  isTop?: boolean; // ¡Atributo añadido aquí!
 }
 
 export type Node<T = NodeData> = RFNode<T>;

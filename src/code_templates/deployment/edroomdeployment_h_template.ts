@@ -6,7 +6,6 @@ export class edroomdeployment_h_template {
     public static generateHeaderFileContent(nodes: Node<NodeData>[], localNodeName: string, edges: Edge[]): string {
 
         // Filtra los nodos y conexiones que pertenecen al nodo local
-        const localNodes = nodes.filter(n => n.data.node === localNodeName);
         const allConnections = edges.filter(e => {
             const sourceNode = nodes.find(n => n.id === e.source);
             const targetNode = nodes.find(n => n.id === e.target);
@@ -16,13 +15,9 @@ export class edroomdeployment_h_template {
         // 1. Generar inclusiones de cabeceras para TODOS los componentes
         const includes = nodes.map(c => {
             const name = c.data.name.replace(/\s/g, '').toLowerCase();
-            const componentClassPrefix = this.getComponentClassPrefix(c, localNodeName);
+            const prefix = this.getIncludePrefix(c, localNodeName);
             
-            if (c.data.name === 'ICUASW') {
-                return `#include <public/${name}_iface_v1.h>`;
-            } else {
-                return `#include <public/${componentClassPrefix.toLowerCase()}${name}_iface_v1.h>`;
-            }
+            return `#include <public/${prefix}${name}_iface_v1.h>`;
         }).join('\n');
 
         // 2. Declaraciones de memoria de componentes
@@ -33,10 +28,10 @@ export class edroomdeployment_h_template {
             
             return `
     //!Messages Memory of component ${instanceName}
-    CEDROOMMessage  ${instanceName}Messages[${maxMessages}];
-    bool  ${instanceName}MessagesMarks[${maxMessages}];
+    CEDROOMMessage ${instanceName}Messages[${maxMessages}];
+    bool ${instanceName}MessagesMarks[${maxMessages}];
     CEDROOMQueue::CQueueNode    ${instanceName}QueueNodes[${maxQueueNodes}];
-    bool  ${instanceName}QueueNodesMarks[${maxQueueNodes}];
+    bool ${instanceName}QueueNodesMarks[${maxQueueNodes}];
 `;
         }).join('');
 
@@ -46,19 +41,49 @@ export class edroomdeployment_h_template {
             const componentClass = this.getComponentClass(c, localNodeName);
             return `    ${componentClass}::CEDROOMMemory ${instanceName}Memory;`;
         }).join('\n');
-
+        
+        // Filtra las conexiones que tienen al componente Top como fuente o destino
+        const topLocalConnections = allConnections.filter(conn => {
+            const sourceNode = nodes.find(n => n.id === conn.source);
+            const targetNode = nodes.find(n => n.id === conn.target);
+            
+            // Check if one node is the local Top and the other is any other component (local or remote)
+            const isSourceTop = sourceNode?.data.isTop && sourceNode.data.node === localNodeName;
+            const isTargetTop = targetNode?.data.isTop && targetNode.data.node === localNodeName;
+            
+            return isSourceTop || isTargetTop;
+        });
+        
+        // Filtrar las conexiones que NO involucran al componente Top
+        const nonTopConnections = allConnections.filter(conn => {
+            const sourceNode = nodes.find(n => n.id === conn.source);
+            const targetNode = nodes.find(n => n.id === conn.target);
+            const isSourceTop = sourceNode?.data.isTop && sourceNode.data.node === localNodeName;
+            const isTargetTop = targetNode?.data.isTop && targetNode.data.node === localNodeName;
+            return !(isSourceTop || isTargetTop);
+        });
+        
         // 4. Documentación de la función Connect
         let connectFunctionDoc = "";
 
+        // Collect all unique nodes connected to the local Top component
+        const connectedNodes = new Set<Node<NodeData>>();
+        topLocalConnections.forEach(conn => {
+            const sourceNode = nodes.find(n => n.id === conn.source);
+            const targetNode = nodes.find(n => n.id === conn.target);
+            if (sourceNode) connectedNodes.add(sourceNode);
+            if (targetNode) connectedNodes.add(targetNode);
+        });
+
         // Documentación de los parámetros de interfaz
-        connectFunctionDoc += localNodes.map(c => {
-            const name = c.data.name.toLowerCase().replace(/\s/g, '');
+        connectFunctionDoc += Array.from(connectedNodes).map(c => {
+            const name = this.getInstanceName(c, localNodeName);
             return `\
     * \\param interface${name} reference to component ${c.data.componentId} interface`;
         }).join('\n');
 
         // Documentación de los parámetros del traductor de señales
-        connectFunctionDoc += allConnections.map(conn => {
+        connectFunctionDoc += topLocalConnections.map(conn => {
             const sourceNode = nodes.find(n => n.id === conn.source);
             const targetNode = nodes.find(n => n.id === conn.target);
             const sourceName = this.getInstanceName(sourceNode!, localNodeName);
@@ -70,21 +95,25 @@ export class edroomdeployment_h_template {
         }).join('\n');
         
         // 5. Firma de la función Connect
-        const connectFunctionSignature = allConnections.map(conn => {
+        let connectInterfaceSignature = Array.from(connectedNodes).map(c => {
+            const name = this.getInstanceName(c, localNodeName);
+            return `,CEDROOMInterface & interface${name}`;
+        }).join('');
+        
+        const connectSignalTranslatorSignature = topLocalConnections.map(conn => {
             const sourceNode = nodes.find(n => n.id === conn.source);
             const targetNode = nodes.find(n => n.id === conn.target);
             const sourceName = this.getInstanceName(sourceNode!, localNodeName);
             const targetName = this.getInstanceName(targetNode!, localNodeName);
 
             return `
-                 ,CEDROOMInterface & interface${sourceName}
-                 ,CEDROOMInterface & interface${targetName}
                  ,TEDROOMSignal  (${sourceName}To${targetName}SignalTranslator) (TEDROOMSignal)
                  ,TEDROOMSignal  (${targetName}To${sourceName}SignalTranslator) (TEDROOMSignal)`;
         }).join('');
 
         // 6. Generar las funciones de conversión de señales
-        const signalConversions = allConnections.map(conn => {
+        this.resetPortCounter();
+        const signalConversions = nonTopConnections.map(conn => {
             const sourceNode = nodes.find(n => n.id === conn.source);
             const targetNode = nodes.find(n => n.id === conn.target);
             
@@ -109,15 +138,15 @@ export class edroomdeployment_h_template {
         const systemCommSAPMembers = nodes.map(c => {
             const componentClass = this.getComponentClass(c, localNodeName);
             const instanceName = this.getInstanceName(c, localNodeName);
-            return `    static ${componentClass}   * mp_${instanceName};`;
+            return `     static ${componentClass}  * mp_${instanceName};`;
         }).join('\n');
 
         // 8. Parámetros para SetComponents
         const setComponentsParameters = nodes.map(c => {
             const componentClass = this.getComponentClass(c, localNodeName);
             const instanceName = this.getInstanceName(c, localNodeName);
-            return `${componentClass}   *p_${instanceName}`;
-        }).join(',\n                             ');
+            return `${componentClass}  *p_${instanceName}`;
+        }).join(',\n                         ');
         
         // 9. Miembros de CEDROOMSystemDeployment
         const systemDeploymentMembers = nodes.map(c => {
@@ -131,17 +160,30 @@ export class edroomdeployment_h_template {
             const componentClass = this.getComponentClass(c, localNodeName);
             const instanceName = this.getInstanceName(c, localNodeName);
             return `${componentClass}    *p_${instanceName}`;
-        }).join(',\n                             ');
+        }).join(',\n                         ');
 
         // 11. Funciones GetMemory
         const getMemoryFunctions = nodes.map(c => {
             const componentClass = this.getComponentClass(c, localNodeName);
             const instanceName = this.getInstanceName(c, localNodeName);
-            return `    ${componentClass}::CEDROOMMemory       * Get${instanceName}Memory(){return &systemMemory.${instanceName}Memory;}`;
+            return `    ${componentClass}        * Get${instanceName}Memory(){return &systemMemory.${instanceName}Memory;}`;
         }).join('\n');
 
+        // Contar las conexiones locales (sin el componente Top) y remotas
+        const localConnectionCount = allConnections.filter(conn => {
+            const sourceNode = nodes.find(n => n.id === conn.source);
+            const targetNode = nodes.find(n => n.id === conn.target);
+            return sourceNode?.data.node === localNodeName && targetNode?.data.node === localNodeName && !sourceNode.data.isTop && !targetNode.data.isTop;
+        }).length;
+
+        const remoteConnectionCount = allConnections.filter(conn => {
+            const sourceNode = nodes.find(n => n.id === conn.source);
+            const targetNode = nodes.find(n => n.id === conn.target);
+            return sourceNode?.data.node !== targetNode?.data.node;
+        }).length;
+
         return `//##############################################################################
-//###############     This file has been generated by EDROOM     ###############
+//###############    This file has been generated by EDROOM    ###############
 //##############################################################################
 
 #ifndef EDROOMDEPLOYMENT_H_
@@ -226,10 +268,9 @@ ${connectFunctionDoc}
     * \\param connection reference to the object that handles the connection
     */
     void Connect(
-                CEDROOMInterface & interfaceicuasw
-                ,CEDROOMInterface & interfaceccepdmanager
-                ,CEDROOMRemoteConnection &connection
-                ${connectFunctionSignature});
+                 ${connectInterfaceSignature}
+                 ,CEDROOMRemoteConnection &connection
+                 ${connectSignalTranslatorSignature});
 
 
 };
@@ -244,8 +285,8 @@ class CEDROOMSystemCommSAP{
 
 //!Conections
 
-    CEDROOMLocalConnection connections[1];
-    CEDROOMRemoteConnection remote_connections[4];
+    CEDROOMLocalConnection connections[${localConnectionCount}];
+    CEDROOMRemoteConnection remote_connections[${remoteConnectionCount}];
 
 //!Components
 
@@ -331,36 +372,55 @@ ${getMemoryFunctions}
     // --- Funciones auxiliares para la lógica de la plantilla ---
     
     private static getInstanceName(node: Node<NodeData>, localNodeName: string): string {
-        let instanceName = node.data.name.toLowerCase().replace(/\s/g, '');
-        if (node.data.node !== localNodeName) {
-            instanceName = `r${instanceName}`;
+        const isRemote = node.data.node !== localNodeName;
+        const componentNameBase = node.data.name.toLowerCase().replace(/\s/g, '');
+        
+        if (node.data.isTop && isRemote) {
+            return `r${componentNameBase}`;
+        } else if (node.data.isTop && !isRemote) {
+            return componentNameBase;
+        } else if (!node.data.isTop && isRemote) {
+            return `rcc${componentNameBase}`;
+        } else { // !node.data.isTop && !isRemote
+            return `cc${componentNameBase}`;
         }
-        return instanceName;
     }
     
     private static getComponentClass(node: Node<NodeData>, localNodeName: string): string {
-        const componentType = node.data.name;
-        if (componentType === 'ICUASW') {
-            return 'ICUASW';
-        } else if (node.data.node === localNodeName) {
-            return `CC${componentType.replace(/\s/g, '')}`;
-        } else {
-            return `RCC${componentType.replace(/\s/g, '')}`;
+        const isRemote = node.data.node !== localNodeName;
+        const componentType = node.data.name.replace(/\s/g, '');
+
+        if (node.data.isTop && isRemote) {
+            return `R${componentType}`;
+        } else if (node.data.isTop && !isRemote) {
+            return componentType;
+        } else if (!node.data.isTop && isRemote) {
+            return `RCC${componentType}`;
+        } else { // !node.data.isTop && !isRemote
+            return `CC${componentType}`;
         }
     }
     
-    private static getComponentClassPrefix(node: Node<NodeData>, localNodeName: string): string {
-        if (node.data.name === 'ICUASW') {
+    private static getIncludePrefix(node: Node<NodeData>, localNodeName: string): string {
+        const isRemote = node.data.node !== localNodeName;
+        
+        if (node.data.isTop && isRemote) {
+            return 'r';
+        } else if (node.data.isTop && !isRemote) {
             return '';
-        } else if (node.data.node === localNodeName) {
-            return 'cc';
-        } else {
+        } else if (!node.data.isTop && isRemote) {
             return 'rcc';
+        } else { // !node.data.isTop && !isRemote
+            return 'cc';
         }
     }
     
     private static portCounter: Record<string, number> = {};
     
+    private static resetPortCounter(): void {
+        this.portCounter = {};
+    }
+
     private static getPortSuffix(portName: string): string {
         this.portCounter[portName] = (this.portCounter[portName] || 0) + 1;
         if (this.portCounter[portName] > 1) {

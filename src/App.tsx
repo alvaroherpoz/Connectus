@@ -27,7 +27,7 @@ type Notification = {
 };
 
 const initialNodes: Node<NodeData>[] = [
-  { id: '1', type: 'componentNode', data: { name: 'ICUASW', ports: [], node: 'Nodo 1', componentId: 1, maxMessages: 13, priority: 'EDROOMprioHigh', stackSize: 8192 }, position: { x: 250, y: 50 }, selectable: true, style: { zIndex: 1 } }
+  { id: '1', type: 'componentNode', data: { name: 'Component', ports: [], node: 'Node', componentId: 1, maxMessages: 13, priority: 'EDROOMprioHigh', stackSize: 8192, isTop: true }, position: { x: 250, y: 50 }, selectable: true, style: { zIndex: 1 } }
 ];
 const initialEdges: Edge[] = [];
 
@@ -81,11 +81,12 @@ const App: React.FC = () => {
       data: {
           name: `Componente${newComponentId}`,
           ports: [],
-          node: defaultNodeName, // Uso de la variable aquí
+          node: defaultNodeName,
           componentId: newComponentId,
           maxMessages: 10,
           priority: 'EDROOMprioNormal',
-          stackSize: 2048
+          stackSize: 2048,
+          isTop: false
       },
       position: { x: Math.random() * 250, y: Math.random() * 250 },
       selectable: true,
@@ -220,24 +221,20 @@ const App: React.FC = () => {
         }
     }
 
-    // --- Lógica para la coloración de nodos ---
     const existingNode = nodes.find(node => node.id === nodeId);
     let newColor = existingNode?.style?.backgroundColor;
 
     if (data.node !== undefined && data.node !== existingNode?.data.node) {
         if (data.node !== '') {
-            // Genera o recupera un color para el nuevo grupo de nodos
             const hue = Math.floor(Math.random() * 360);
             const colorToSet = nodeColors[data.node] || `hsl(${hue}, 70%, 85%)`;
 
-            // Actualiza el estado de los colores, garantizando que el valor es una cadena
             setNodeColors(prevColors => ({
                 ...prevColors,
                 [data.node!]: colorToSet,
             }));
             newColor = colorToSet;
         } else {
-            // El campo `node` se ha vaciado, así que eliminamos el color del estado
             setNodeColors(prevColors => {
                 const updatedColors = { ...prevColors };
                 if (existingNode?.data.node) {
@@ -270,6 +267,18 @@ const App: React.FC = () => {
     return true;
     
   }, [setNodes, nodes, setNotification, nodeColors]);
+  
+  const handleUpdateIsTop = useCallback((nodeId: string, isTop: boolean) => {
+    setNodes(nds =>
+      nds.map(node => {
+        if (isTop && node.id === nodeId) {
+          return { ...node, data: { ...node.data, isTop: true } };
+        } else {
+          return { ...node, data: { ...node.data, isTop: false } };
+        }
+      })
+    );
+  }, [setNodes]);
 
   const handleAddConjugatePort = useCallback((nodeId: string, nominalPortId: string) => {
     let nominalPort: PortData | undefined;
@@ -523,6 +532,7 @@ const App: React.FC = () => {
               nodeData={selectedNodeToEdit.data}
               onClose={() => setSelectedNodeToEdit(null)}
               onUpdateNode={handleUpdateNodeAttributes}
+              onUpdateIsTop={handleUpdateIsTop}
           />
       )}
       {notification && <NotificationBar notification={notification} />}

@@ -4,7 +4,7 @@
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
     border-radius: 8px;
     padding: 1rem;
-    position: fixed; /* ¡Esta es la clave para que flote! */
+    position: fixed;
     z-index: 1000;
     width: 300px;
     max-height: 80vh;
@@ -65,9 +65,20 @@
     background-color: #e76f51;
     color: white;
 }
+
 .attributes-panel-body select {
     padding: 0.5rem;
     border: 1px solid #ccc;
     border-radius: 4px;
     width: 100%;
+}
+
+.form-group.checkbox-group {
+    flex-direction: row; /* Alinea el checkbox y el label en una fila */
+    align-items: center; /* Centra los elementos verticalmente */
+    gap: 10px; /* Añade un espacio entre el checkbox y el label */
+}
+
+.form-group.checkbox-group label {
+    margin-bottom: 0; /* Elimina el margen inferior del label para esta clase específica */
 }

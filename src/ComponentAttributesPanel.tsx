@@ -6,7 +6,8 @@ interface ComponentAttributesPanelProps {
   nodeId: string;
   nodeData: NodeData;
   onClose: () => void;
-  onUpdateNode: (nodeId: string, data: Partial<NodeData>) => boolean; // Se ha modificado para que devuelva un booleano.
+  onUpdateNode: (nodeId: string, data: Partial<NodeData>) => boolean;
+  onUpdateIsTop: (nodeId: string, isTop: boolean) => void;
 }
 
 const ComponentAttributesPanel: React.FC<ComponentAttributesPanelProps> = ({
@@ -14,6 +15,7 @@ const ComponentAttributesPanel: React.FC<ComponentAttributesPanelProps> = ({
   nodeData,
   onClose,
   onUpdateNode,
+  onUpdateIsTop,
 }) => {
   const [localData, setLocalData] = useState<NodeData>(nodeData);
 
@@ -74,6 +76,12 @@ const ComponentAttributesPanel: React.FC<ComponentAttributesPanelProps> = ({
       onClose();
     }
   };
+  
+  const handleIsTopChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const isChecked = e.target.checked;
+    setLocalData({ ...localData, isTop: isChecked });
+    onUpdateIsTop(nodeId, isChecked);
+  };
 
   return (
     <div
@@ -129,13 +137,14 @@ const ComponentAttributesPanel: React.FC<ComponentAttributesPanelProps> = ({
             value={localData.priority}
             onChange={(e) => setLocalData({ ...localData, priority: e.target.value as ComponentPriority })}
           >
-            <option value="EDROOMprioCritical">EDROOMprioCritical</option>
+            <option value="EDROOMprioURGENT">EDROOMprioURGENT</option>
             <option value="EDROOMprioVeryHigh">EDROOMprioVeryHigh</option>
             <option value="EDROOMprioHigh">EDROOMprioHigh</option>
             <option value="EDROOMprioNormal">EDROOMprioNormal</option>
             <option value="EDROOMprioLow">EDROOMprioLow</option>
             <option value="EDROOMprioVeryLow">EDROOMprioVeryLow</option>
-            <option value="EDROOMprioIdle">EDROOMprioIdle</option>
+            <option value="EDROOMprioMINIMUM">EDROOMprioMINIMUM</option>
+            <option value="EDROOMprioIDLE">EDROOMprioIDLE</option>
           </select>
         </div>
         <div className="form-group">
@@ -146,6 +155,15 @@ const ComponentAttributesPanel: React.FC<ComponentAttributesPanelProps> = ({
             value={localData.stackSize}
             onChange={(e) => setLocalData({ ...localData, stackSize: Number(e.target.value) })}
           />
+        </div>
+        <div className="form-group checkbox-group">
+          <input
+            id="is-top"
+            type="checkbox"
+            checked={localData.isTop || false}
+            onChange={handleIsTopChange}
+          />
+          <label htmlFor="is-top">Top Component</label>
         </div>
         <div className="button-group">
           <button onClick={handleSave}>Aceptar</button>
