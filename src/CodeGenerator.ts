@@ -1,10 +1,9 @@
-// src/CodeGenerator.ts
-
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import type { Node, NodeData, Edge } from './types';
 import { icuasw_mmesp_project_template } from './code_templates/main/icuasw_mmesp_project_template';
 import { edroomdeployment_h_template } from './code_templates/deployment/edroomdeployment_h_template';
+import { edroomdeployment_cpp_template } from './code_templates/deployment/edroomdeployment_cpp_template'; // Nueva importación
 
 export class CodeGenerator {
     /**
@@ -37,7 +36,8 @@ export class CodeGenerator {
 
                     const glueSrcFolder = glueFolder.folder("src");
                     if (glueSrcFolder) {
-                        glueSrcFolder.file("edroomdeployment.c", "");
+                        const deploymentCppContent = edroomdeployment_cpp_template.generateCppFileContent(nodes, nodeToGenerate as string, edges);
+                        glueSrcFolder.file("edroomdeployment.cpp", deploymentCppContent);
                     }
                 }
             }
