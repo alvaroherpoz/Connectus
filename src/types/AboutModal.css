@@ -1,4 +1,9 @@
-/* AboutModal.css */
+/*
+ * AboutModal.css
+ * Estilos para el modal informativo de la aplicación Connectus.
+ * Define la apariencia del fondo, el contenido del modal y los elementos internos.
+ */
+
 .modal-backdrop {
     position: fixed;
     top: 0;

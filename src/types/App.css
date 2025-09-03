@@ -1,12 +1,19 @@
-/* src/App.css */
+/*
+ * App.css
+ * Estilos globales para la aplicación Connectus.
+ * Define la apariencia y disposición de la interfaz principal, la barra de herramientas y los menús.
+ */
 
+/* Contenedor principal de la aplicación */
 .app-container {
   width: 100vw;
   height: 100vh;
   display: flex;
   flex-direction: column;
+  background-color: #fef5ed;
 }
 
+/* Barra de herramientas superior */
 .toolbar {
   position: absolute;
   top: 10px;
@@ -16,6 +23,7 @@
   gap: 10px;
 }
 
+/* Botón de la barra de herramientas */
 .toolbar-button {
   padding: 8px 12px;
   border: none;
@@ -28,18 +36,22 @@
   transition: background-color 0.2s;
 }
 
+/* Botón hover */
 .toolbar-button:hover {
   background-color: #0056b3;
 }
 
+/* Botón de herramientas */
 .toolbar-button-tools {
   background-color: #6c757d;
 }
 
+/* Dropdown de herramientas */
 .tools-dropdown {
   position: relative;
 }
 
+/* Menú desplegable de herramientas */
 .dropdown-menu {
   position: absolute;
   top: 100%;
@@ -55,6 +67,7 @@
   flex-direction: column;
 }
 
+/* Elemento del menú desplegable */
 .dropdown-item {
   padding: 8px 12px;
   text-align: left;
@@ -66,33 +79,30 @@
   color: #333;
 }
 
+/* Hover en el menú desplegable */
 .dropdown-item:hover {
   background-color: #f0f0f0;
 }
 
+/* Oculta el input de carga de archivos */
 .hidden-input-label,
 .hidden-input {
   display: none;
 }
-.app-container {
-  width: 100vw;
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-  background-color: #fef5ed;
-}
+
 /* Z-index para asegurar que las líneas de React Flow se vean por encima de los nodos */
-/* Esto puede ser necesario si el zIndex en el nodo no es suficiente */
 .react-flow__edges {
-    z-index: 1000; /* Un valor alto para garantizar que estén por encima */
+    z-index: 1000;
 }
+
+/* Estilo para los nodos de React Flow */
 .react-flow__node.componentNode {
   padding: 0;
   border: none;
-  border-radius: 5px; /* Aplicamos el radio de borde aquí */
+  border-radius: 5px;
 }
 
-/* Opcional: Estilo de tu componente interno si lo necesitas */
+/* Estilo para el componente interno del nodo */
 .component-node {
   border: 1px solid #ccc;
   border-radius: 5px;

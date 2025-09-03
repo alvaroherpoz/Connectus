@@ -1,3 +1,10 @@
+/* 
+ * ComponentAttributesPanel.css
+ * Estilos para el panel de edición de atributos de componentes.
+ * Define la apariencia, disposición y comportamiento visual del panel y sus elementos.
+ */
+
+/* Contenedor principal del panel de atributos */
 .attributes-panel-container {
     background-color: #fff;
     border: 1px solid #ddd;
@@ -13,6 +20,7 @@
     flex-direction: column;
 }
 
+/* Encabezado del panel, permite arrastrar el panel */
 .attributes-panel-header-draggable {
     display: flex;
     justify-content: space-between;
@@ -23,24 +31,27 @@
     cursor: move;
 }
 
-/* Resto de estilos para botones, inputs, etc. */
+/* Grupo de formulario dentro del panel */
 .attributes-panel-body .form-group {
     margin-bottom: 1rem;
     display: flex;
     flex-direction: column;
 }
 
+/* Etiquetas de los campos del formulario */
 .attributes-panel-body label {
     font-weight: bold;
     margin-bottom: 0.5rem;
 }
 
+/* Campos de entrada del formulario */
 .attributes-panel-body input {
     padding: 0.5rem;
     border: 1px solid #ccc;
     border-radius: 4px;
 }
 
+/* Botonera del panel de atributos */
 .attributes-panel-body .button-group {
     display: flex;
     justify-content: flex-end;
@@ -48,6 +59,7 @@
     margin-top: 1rem;
 }
 
+/* Botones de la botonera */
 .attributes-panel-body .button-group button {
     padding: 0.5rem 1rem;
     border: none;
@@ -56,16 +68,19 @@
     font-weight: bold;
 }
 
+/* Botón de aceptar */
 .attributes-panel-body .button-group button:first-child {
     background-color: #2a9d8f;
     color: white;
 }
 
+/* Botón de cancelar */
 .attributes-panel-body .button-group button:last-child {
     background-color: #e76f51;
     color: white;
 }
 
+/* Selectores del formulario */
 .attributes-panel-body select {
     padding: 0.5rem;
     border: 1px solid #ccc;
@@ -73,12 +88,14 @@
     width: 100%;
 }
 
+/* Grupo de checkbox para el atributo "top component" */
 .form-group.checkbox-group {
     flex-direction: row; /* Alinea el checkbox y el label en una fila */
     align-items: center; /* Centra los elementos verticalmente */
     gap: 10px; /* Añade un espacio entre el checkbox y el label */
 }
 
+/* Etiqueta específica para el grupo de checkbox */
 .form-group.checkbox-group label {
     margin-bottom: 0; /* Elimina el margen inferior del label para esta clase específica */
 }
