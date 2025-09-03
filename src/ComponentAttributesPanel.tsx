@@ -1,7 +1,16 @@
+/**
+ * ComponentAttributesPanel.tsx
+ * Panel para editar los atributos de un componente seleccionado en el diagrama.
+ * Permite modificar propiedades como ID, nombre, nodo, prioridad, stack y si es el componente top.
+ */
+
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import type { NodeData, ComponentPriority } from './types';
 import './ComponentAttributesPanel.css';
 
+/**
+ * Props del panel de atributos del componente.
+ */
 interface ComponentAttributesPanelProps {
   nodeId: string;
   nodeData: NodeData;
@@ -10,6 +19,9 @@ interface ComponentAttributesPanelProps {
   onUpdateIsTop: (nodeId: string, isTop: boolean) => void;
 }
 
+/**
+ * Panel para editar los atributos de un componente.
+ */
 const ComponentAttributesPanel: React.FC<ComponentAttributesPanelProps> = ({
   nodeId,
   nodeData,
@@ -24,6 +36,9 @@ const ComponentAttributesPanel: React.FC<ComponentAttributesPanelProps> = ({
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [position, setPosition] = useState({ x: 0, y: 0 });
 
+  /**
+   * Centra el panel en pantalla al montarse.
+   */
   useEffect(() => {
     if (panelRef.current) {
       const panel = panelRef.current;
@@ -33,11 +48,17 @@ const ComponentAttributesPanel: React.FC<ComponentAttributesPanelProps> = ({
     }
   }, []);
 
+  /**
+   * Inicia el arrastre del panel.
+   */
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     setIsDragging(true);
     setDragStart({ x: e.clientX, y: e.clientY });
   }, []);
 
+  /**
+   * Gestiona el movimiento del panel mientras se arrastra.
+   */
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (isDragging) {
       const deltaX = e.clientX - dragStart.x;
@@ -52,10 +73,16 @@ const ComponentAttributesPanel: React.FC<ComponentAttributesPanelProps> = ({
     }
   }, [isDragging, dragStart]);
 
+  /**
+   * Finaliza el arrastre del panel.
+   */
   const handleMouseUp = useCallback(() => {
     setIsDragging(false);
   }, []);
 
+  /**
+   * Añade y elimina listeners de arrastre según el estado.
+   */
   useEffect(() => {
     if (isDragging) {
       document.addEventListener('mousemove', handleMouseMove);
@@ -70,6 +97,9 @@ const ComponentAttributesPanel: React.FC<ComponentAttributesPanelProps> = ({
     };
   }, [isDragging, handleMouseMove, handleMouseUp]);
 
+  /**
+   * Guarda los cambios realizados en el panel.
+   */
   const handleSave = () => {
     const success = onUpdateNode(nodeId, localData);
     if (success) {
@@ -77,12 +107,16 @@ const ComponentAttributesPanel: React.FC<ComponentAttributesPanelProps> = ({
     }
   };
   
+  /**
+   * Cambia el estado de "top component".
+   */
   const handleIsTopChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const isChecked = e.target.checked;
     setLocalData({ ...localData, isTop: isChecked });
     onUpdateIsTop(nodeId, isChecked);
   };
 
+  // Renderizado del panel de atributos
   return (
     <div
       ref={panelRef}

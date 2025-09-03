@@ -1,8 +1,24 @@
+/**
+ * edroomdeployment_cpp_template.ts
+ * Plantilla para generar el archivo fuente (.cpp) de despliegue EDROOM.
+ * Genera la lógica de inicialización, conexión y traducción de señales entre componentes.
+ */
+
 import type { Node, NodeData, Edge, PortData } from '../../types';
 
+/**
+ * Clase que encapsula la generación del archivo .cpp de despliegue EDROOM.
+ */
 export class edroomdeployment_cpp_template {
+    /**
+     * Genera el contenido del archivo .cpp para el despliegue de un nodo lógico.
+     * @param nodes - Nodos del diagrama.
+     * @param localNodeName - Nombre del nodo local.
+     * @param edges - Conexiones entre nodos.
+     * @returns Código fuente .cpp generado.
+     */
     public static generateCppFileContent(nodes: Node<NodeData>[], localNodeName: string, edges: Edge[]): string {
-
+        // Genera el contenido principal del archivo .cpp de despliegue.
         const allNodes = nodes;
         const remoteNodes = nodes.filter(n => n.data.node !== localNodeName);
 
@@ -104,7 +120,7 @@ ${interfaceCases}
             const port_target_name = targetPortName;
 
 
-            // FIX: getComponentSignals must be called with the specific port data
+            // getComponentSignals must be called with the specific port data
             const sourcePortData = sourceNode.data.ports.filter(p => p.name.replace(/\s/g, '') === sourcePortName);
             const targetPortData = targetNode.data.ports.filter(p => p.name.replace(/\s/g, '') === targetPortName);
 
@@ -206,7 +222,7 @@ TEDROOMSignal CEDROOMSystemCommSAP::C${targetNode.data.componentId}${targetName}
             const local_interface_name = localInterfaceName;
             const remote_interface_name = remoteInterfaceName;
             
-            // Cambiado: Ahora el segundo argumento apunta al puerto de la instancia remota
+            
             return `\
              m_remoteCommSAP.Connect(mp_${localInstance}->${localInterfaceName}, mp_${remoteInstance}->${remoteInterfaceName}, remote_connections[${index}],
                                              C${localComponent.data.componentId}${localName}_P${local_interface_name}__C${remoteComponent.data.componentId}${remoteName}_P${remote_interface_name},
@@ -534,7 +550,12 @@ Pr_TaskRV_t CEDROOMSystemDeployment::main_task(Pr_TaskP_t){
     }
 
     // --- Funciones auxiliares para la lógica de la plantilla ---
-
+    /**
+     * Obtiene el nombre de instancia para un nodo dado.
+     * @param node - Nodo del diagrama.
+     * @param localNodeName - Nombre del nodo local.
+     * @returns Nombre de instancia.
+     */
     private static getInstanceName(node: Node<NodeData>, localNodeName: string): string {
         const componentNameBase = node.data.name.replace(/\s/g, '').toLowerCase();
 
@@ -547,6 +568,12 @@ Pr_TaskRV_t CEDROOMSystemDeployment::main_task(Pr_TaskP_t){
         }
     }
 
+    /**
+     * Obtiene la clase de componente para un nodo.
+     * @param node - Nodo del diagrama.
+     * @param localNodeName - Nombre del nodo local.
+     * @returns Nombre de la clase de componente.
+     */
     private static getComponentClass(node: Node<NodeData>, localNodeName: string): string {
         const componentType = node.data.name.replace(/\s/g, '');
 
@@ -566,6 +593,13 @@ Pr_TaskRV_t CEDROOMSystemDeployment::main_task(Pr_TaskP_t){
             }
         }
     }
+
+    /**
+     * Obtiene el identificador de puerto desde un edge.
+     * @param edge - Conexión entre nodos.
+     * @param type - Tipo de puerto ('source' o 'target').
+     * @returns Identificador del puerto.
+     */
     private static getPortsFromEdge(edge: Edge, type: 'source' | 'target'): string {
         const portHandle = type === 'source' ? edge.sourceHandle : edge.targetHandle;
         if (portHandle) {
@@ -575,6 +609,12 @@ Pr_TaskRV_t CEDROOMSystemDeployment::main_task(Pr_TaskP_t){
         return '';
     }
 
+    /**
+     * Obtiene el identificador de interfaz para un nodo y edge.
+     * @param node - Nodo del diagrama.
+     * @param edge - Conexión entre nodos.
+     * @returns Identificador de la interfaz.
+     */
     private static getInterfaceIdFromEdge(node: Node<NodeData>, edge: Edge): string | number {
         const handle = node.id === edge.source ? edge.sourceHandle : edge.targetHandle;
         const portName = handle?.split('-')[1];
@@ -582,6 +622,11 @@ Pr_TaskRV_t CEDROOMSystemDeployment::main_task(Pr_TaskP_t){
         return interfaceObj?.id || -1;
     }
 
+    /**
+     * Extrae las señales de los puertos de un componente.
+     * @param ports - Lista de puertos.
+     * @returns Array de señales con información de tipo, nombre y dato.
+     */
     private static getComponentSignals(ports: PortData[]): Array<{ name: string; type: 'IN' | 'OUT'; portName: string; dataType: string }> {
         const signals: Array<{ name: string; type: 'IN' | 'OUT'; portName: string; dataType: string }> = [];
         ports.forEach(port => {
@@ -599,6 +644,12 @@ Pr_TaskRV_t CEDROOMSystemDeployment::main_task(Pr_TaskP_t){
         return signals;
     }
 
+    /**
+     * Genera los casos de traducción de señales entre nodos remotos y locales.
+     * @param remoteNode - Nodo remoto.
+     * @param localNode - Nodo local.
+     * @returns Código fuente para los casos de señales.
+     */
     private static generateSignalCases(remoteNode: Node<NodeData>, localNode: Node<NodeData>): string {
         let cases = '';
         const remoteSignals = this.getComponentSignals(remoteNode.data.ports);
@@ -646,7 +697,11 @@ Pr_TaskRV_t CEDROOMSystemDeployment::main_task(Pr_TaskP_t){
         return cases;
     }
 
-    // Función modificada para manejar la lógica de registro de interfaces
+    /**
+     * Genera el código para el registro de interfaces de los nodos.
+     * @param nodes - Lista de nodos del diagrama.
+     * @returns Código fuente para el registro de interfaces.
+     */
     private static generateRegisterInterfaces(nodes: Node<NodeData>[]): string {
         let content = '';
 

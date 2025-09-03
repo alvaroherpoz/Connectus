@@ -1,10 +1,23 @@
-// src/code_templates/deployment/edroomdeployment_h_template.ts
-
+/**
+ * edroomdeployment_h_template.ts
+ * Plantilla para generar el archivo header (.h) de despliegue EDROOM.
+ * Genera las declaraciones, estructuras y funciones necesarias para la inicialización y conexión de componentes.
+ */
 import type { Node, NodeData, Edge } from '../../types';
 
+/**
+ * Clase que encapsula la generación del archivo header de despliegue EDROOM.
+ */
 export class edroomdeployment_h_template {
+    /**
+     * Genera el contenido del archivo header para el despliegue de un nodo lógico.
+     * @param nodes - Nodos del diagrama.
+     * @param localNodeName - Nombre del nodo local.
+     * @param edges - Conexiones entre nodos.
+     * @returns Código fuente .h generado.
+     */
     public static generateHeaderFileContent(nodes: Node<NodeData>[], localNodeName: string, edges: Edge[]): string {
-
+        // Genera el contenido principal del archivo .h de despliegue.
         // Filtra los nodos y conexiones que pertenecen al nodo local
         const allConnections = edges.filter(e => {
             const sourceNode = nodes.find(n => n.id === e.source);
@@ -354,6 +367,12 @@ ${getMemoryFunctions}
     
     // --- Funciones auxiliares para la lógica de la plantilla ---
     
+    /**
+     * Obtiene el nombre de instancia para un nodo dado.
+     * @param node - Nodo del diagrama.
+     * @param localNodeName - Nombre del nodo local.
+     * @returns Nombre de instancia.
+     */
     private static getInstanceName(node: Node<NodeData>, localNodeName: string): string {
         const isRemote = node.data.node !== localNodeName;
         const componentNameBase = node.data.name.toLowerCase().replace(/\s/g, '');
@@ -364,6 +383,12 @@ ${getMemoryFunctions}
         return componentNameBase;
     }
     
+    /**
+     * Obtiene la clase de componente para un nodo.
+     * @param node - Nodo del diagrama.
+     * @param localNodeName - Nombre del nodo local.
+     * @returns Nombre de la clase de componente.
+     */
     private static getComponentClass(node: Node<NodeData>, localNodeName: string): string {
         const isRemote = node.data.node !== localNodeName;
         const componentType = node.data.name.replace(/\s/g, '');
@@ -379,6 +404,12 @@ ${getMemoryFunctions}
         }
     }
     
+    /**
+     * Obtiene el prefijo de inclusión para un nodo.
+     * @param node - Nodo del diagrama.
+     * @param localNodeName - Nombre del nodo local.
+     * @returns Prefijo para el include.
+     */
     private static getIncludePrefix(node: Node<NodeData>, localNodeName: string): string {
         const isRemote = node.data.node !== localNodeName;
         
@@ -395,18 +426,19 @@ ${getMemoryFunctions}
     
     private static portCounter: Record<string, number> = {};
     
+    /**
+     * Reinicia el contador de sufijos de puertos.
+     */
     private static resetPortCounter(): void {
         this.portCounter = {};
     }
-
-    private static getPortSuffix(portName: string): string {
-        this.portCounter[portName] = (this.portCounter[portName] || 0) + 1;
-        if (this.portCounter[portName] > 1) {
-            return this.portCounter[portName].toString();
-        }
-        return '';
-    }
     
+    /**
+     * Obtiene el identificador de puerto desde un edge.
+     * @param edge - Conexión entre nodos.
+     * @param type - Tipo de puerto ('source' o 'target').
+     * @returns Identificador del puerto.
+     */
     private static getPortsFromEdge(edge: Edge, type: 'source' | 'target'): string {
         const portHandle = type === 'source' ? edge.sourceHandle : edge.targetHandle;
         if (portHandle) {

@@ -1,3 +1,9 @@
+/**
+ * App.tsx
+ * Componente principal de la aplicación Connectus.
+ * Gestiona el estado global, renderiza el diagrama de componentes y coordina la interacción entre nodos, puertos y herramientas.
+ */
+
 import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import ReactFlow, {
   addEdge,
@@ -21,17 +27,31 @@ import { CodeGenerator } from './CodeGenerator';
 import NotificationBar from './NotificationBar';
 import AboutModal from './AboutModal';
 
+/**
+ * Estructura para las notificaciones mostradas al usuario.
+ */
 type Notification = {
   message: string;
   type: 'success' | 'error' | 'info';
 };
 
+/**
+ * Nodos iniciales del diagrama.
+ */
 const initialNodes: Node<NodeData>[] = [
   { id: '1', type: 'componentNode', data: { name: 'Component', ports: [], node: 'Node', componentId: 1, maxMessages: 13, priority: 'EDROOMprioHigh', stackSize: 8192, isTop: true }, position: { x: 250, y: 50 }, selectable: true, style: { zIndex: 1 } }
 ];
+
+/**
+ * Conexiones iniciales del diagrama.
+ */
 const initialEdges: Edge[] = [];
 
+/**
+ * Componente principal que gestiona el diagrama y la interacción global.
+ */
 const App: React.FC = () => {
+  // Estado principal de nodos, conexiones y utilidades de la interfaz
   const [nodes, setNodes] = useState<Node<NodeData>[]>(initialNodes);
   const [edges, setEdges] = useState<Edge[]>(initialEdges);
   const nodeIdCounter = useRef(4);
@@ -51,6 +71,9 @@ const App: React.FC = () => {
   const { getNodes, getEdges } = useReactFlow();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  /**
+   * Muestra notificaciones temporales en la barra de estado.
+   */
   useEffect(() => {
     if (notification) {
       const timer = setTimeout(() => {
@@ -60,6 +83,9 @@ const App: React.FC = () => {
     }
   }, [notification]);
 
+  /**
+   * Añade un nuevo componente al diagrama.
+   */
   const onAddNode = useCallback(() => {
     const newId = nodeIdCounter.current.toString();
     const existingComponentIds = nodes.map(node => node.data.componentId).sort((a, b) => a - b);
@@ -97,6 +123,9 @@ const App: React.FC = () => {
     nodeIdCounter.current++;
   }, [setNodes, nodes]);
 
+  /**
+   * Actualiza los nodos cuando hay cambios en el diagrama.
+   */
   const onNodesChange: OnNodesChange = useCallback(
     (changes: NodeChange[]) => {
       setNodes((nds) => applyNodeChanges(changes, nds));
@@ -104,11 +133,17 @@ const App: React.FC = () => {
     }, [setNodes, menu]
   );
 
+  /**
+   * Actualiza las conexiones (edges) cuando hay cambios en el diagrama.
+   */
   const onEdgesChange = useCallback(
     (changes: EdgeChange[]) => setEdges((eds) => applyEdgeChanges(changes, eds)),
     [setEdges]
   );
 
+  /**
+   * Gestiona la conexión entre puertos de nodos, validando tipos y nombres.
+   */
   const onConnect = useCallback(
     (params: Connection) => {
       setEdges((eds) =>
@@ -153,15 +188,24 @@ const App: React.FC = () => {
     }, [setEdges, nodes, setNotification]
   );
 
+  /**
+   * Elimina conexiones seleccionadas.
+   */
   const onEdgesDelete = useCallback((edgesToDelete: Edge[]) => {
     setEdges((eds) => eds.filter(edge => !edgesToDelete.includes(edge)));
   }, [setEdges]);
 
+  /**
+   * Muestra el menú contextual al hacer clic derecho sobre un nodo.
+   */
   const onNodeContextMenu = useCallback((event: React.MouseEvent, node: Node) => {
     event.preventDefault();
     setMenu({ x: event.clientX, y: event.clientY, nodeId: node.id });
   }, []);
 
+  /**
+   * Añade un puerto a un nodo específico.
+   */
   const handleAddPort = useCallback(
       (nodeId: string, name: string, type: 'comunicacion' | 'tiempo' | 'interrupcion', subtype: 'nominal' | 'conjugado' | undefined, messages: Message[], interruptHandler?: string) => {
         setNodes((nds) =>
@@ -191,12 +235,18 @@ const App: React.FC = () => {
       [setNodes, setMenu]
   );
 
+  /**
+   * Elimina un nodo y sus conexiones.
+   */
   const handleDeleteNode = useCallback((nodeId: string) => {
     setNodes((nds) => nds.filter((node) => node.id !== nodeId));
     setEdges((eds) => eds.filter((edge) => edge.source !== nodeId && edge.target !== nodeId));
     setMenu(null);
   }, [setNodes, setEdges]);
 
+  /**
+   * Actualiza los atributos de un nodo, validando duplicados.
+   */
   const handleUpdateNodeAttributes = useCallback((nodeId: string, data: Partial<NodeData>): boolean => {
     const newComponentId = data.componentId;
     const newComponentName = data.name;
@@ -268,6 +318,9 @@ const App: React.FC = () => {
     
   }, [setNodes, nodes, setNotification, nodeColors]);
   
+  /**
+   * Marca un nodo como 'top' y desmarca los demás.
+   */
   const handleUpdateIsTop = useCallback((nodeId: string, isTop: boolean) => {
     setNodes(nds =>
       nds.map(node => {
@@ -280,6 +333,9 @@ const App: React.FC = () => {
     );
   }, [setNodes]);
 
+  /**
+   * Añade un puerto conjugado a partir de un puerto nominal.
+   */
   const handleAddConjugatePort = useCallback((nodeId: string, nominalPortId: string) => {
     let nominalPort: PortData | undefined;
     nodes.forEach(node => {
@@ -328,6 +384,9 @@ const App: React.FC = () => {
     setMenu(null);
   }, [nodes, setNodes, setMenu, setNotification]);
 
+  /**
+   * Elimina un puerto y sus conexiones asociadas.
+   */
   const handleDeletePort = useCallback((nodeId: string, portId: string) => {
     const edgesToDelete = edges.filter(edge => edge.sourceHandle === portId || edge.targetHandle === portId);
 
@@ -348,10 +407,16 @@ const App: React.FC = () => {
     setSelectedPort(null);
   }, [setNodes, setEdges, edges, setSelectedPort]);
 
+  /**
+   * Selecciona un puerto para mostrar su información.
+   */
   const handlePortClick = useCallback((portData: PortData) => {
     setSelectedPort(portData);
   }, []);
 
+  /**
+   * Define los tipos de nodos para ReactFlow.
+   */
   const nodeTypes = useMemo(() => ({
     componentNode: (props: NodeProps<NodeData>) => (
       <ComponentNode
@@ -362,12 +427,18 @@ const App: React.FC = () => {
     ),
   }), [handleDeletePort, handlePortClick]);
 
+  /**
+   * Genera el código fuente y lo descarga como ZIP.
+   */
   const handleGenerateCode = useCallback(() => {
     CodeGenerator.generateCodeAndDownload(nodes, edges);
     setNotification({ message: 'Código generado y listo para descargar.', type: 'success' });
     setShowToolsMenu(false);
   }, [nodes, edges, setNotification]);
 
+  /**
+   * Descarga el diagrama actual en formato JSON.
+   */
   const handleDownload = useCallback(() => {
     const data = JSON.stringify({ nodes: getNodes(), edges: getEdges() }, null, 2);
     const blob = new Blob([data], { type: 'application/json' });
@@ -377,6 +448,9 @@ const App: React.FC = () => {
     setShowToolsMenu(false);
   }, [getNodes, getEdges, downloadFileName, setNotification]);
 
+  /**
+   * Carga un diagrama desde un archivo JSON.
+   */
   const handleLoad = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) {
@@ -434,10 +508,16 @@ const App: React.FC = () => {
     reader.readAsText(file);
   }, [setNotification]);
 
+  /**
+   * Abre el selector de archivos para cargar un diagrama.
+   */
   const handleLoadButtonClick = useCallback(() => {
     fileInputRef.current?.click();
   }, []);
 
+  /**
+   * Añade un nuevo tipo de dato personalizado.
+   */
   const handleAddDataType = useCallback((newType: string) => {
     setDataTypes(prevTypes => {
       if (!prevTypes.includes(newType)) {
@@ -447,6 +527,7 @@ const App: React.FC = () => {
     });
   }, []);
 
+  // Renderizado principal de la aplicación y sus paneles
   return (
     <div className="app-container">
       <div className="toolbar">

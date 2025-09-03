@@ -1,12 +1,23 @@
+/**
+ * PortInfoPanel.tsx
+ * Panel para mostrar y editar la información de un puerto seleccionado.
+ */
+
 import React from 'react';
 import type { PortData } from './types';
 import './PortInfoPanel.css';
 
+/**
+ * Props del panel de información del puerto.
+ */
 interface PortInfoPanelProps {
   port: PortData;
   onClose: () => void;
 }
 
+/**
+ * Componente visual para mostrar la información detallada de un puerto.
+ */
 const PortInfoPanel: React.FC<PortInfoPanelProps> = ({ port, onClose }) => {
   return (
     <div className="port-info-panel">

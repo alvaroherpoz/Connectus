@@ -1,17 +1,32 @@
+/**
+ * ComponentNode.tsx
+ * Componente visual que representa un nodo en el diagrama.
+ * Muestra los puertos, permite eliminarlos y acceder a su información.
+ */
+
 import React, { memo, useCallback } from 'react';
 import { Handle, Position } from 'reactflow';
 import type { NodeProps } from 'reactflow';
 import type { NodeData, PortData } from './types';
 import './ComponentNode.css';
 
+/**
+ * Props del componente ComponentNode.
+ */
 interface ComponentNodeProps extends NodeProps<NodeData> {
   onDeletePort: (nodeId: string, portId: string) => void;
   onPortClick: (portData: PortData) => void;
-  style?: React.CSSProperties; // Añadimos esta línea
+  style?: React.CSSProperties;
 }
 
+/**
+ * Componente visual para un nodo del diagrama.
+ */
 const ComponentNode: React.FC<ComponentNodeProps> = memo(({ id, data, onDeletePort, onPortClick, style }) => {
 
+  /**
+   * Determina el tipo de handle para el puerto (source/target).
+   */
   const getHandleType = useCallback((port: PortData) => {
     if (port.type === 'comunicacion' && port.subtype === 'nominal') {
       return 'source';
@@ -21,10 +36,14 @@ const ComponentNode: React.FC<ComponentNodeProps> = memo(({ id, data, onDeletePo
     return undefined;
   }, []);
 
+  /**
+   * Gestiona el clic sobre un puerto para mostrar su información.
+   */
   const handlePortClick = useCallback((portData: PortData) => {
     onPortClick(portData);
   }, [onPortClick]);
 
+  // Renderizado del nodo y sus puertos
   return (
     <div className="component-node" style={style}>
       <div className="component-node-header">

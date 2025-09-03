@@ -1,6 +1,14 @@
+/**
+ * NotificationBar.tsx
+ * Barra de notificaciones para mostrar mensajes de estado y errores al usuario.
+ */
+
 import React from 'react';
 import './NotificationBar.css';
 
+/**
+ * Props del componente NotificationBar.
+ */
 interface NotificationBarProps {
   notification: {
     message: string;
@@ -8,6 +16,9 @@ interface NotificationBarProps {
   } | null;
 }
 
+/**
+ * Componente visual para mostrar notificaciones al usuario.
+ */
 const NotificationBar: React.FC<NotificationBarProps> = ({ notification }) => {
   if (!notification) {
     return null;

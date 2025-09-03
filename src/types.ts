@@ -1,3 +1,8 @@
+/**
+ * types.ts
+ * Define los tipos y estructuras de datos utilizados en la aplicación Connectus.
+ */
+
 import type {
   Node as RFNode,
   Edge as RFEdge,
@@ -9,14 +14,31 @@ import type {
   NodeChange as RFNodeChange
 } from 'reactflow';
 
-export type ComponentPriority = 'EDROOMprioURGENT' | 'EDROOMprioVeryHigh' | 'EDROOMprioHigh' | 'EDROOMprioNormal' | 'EDROOMprioLow' | 'EDROOMprioVeryLow' | 'EDROOMprioIDLE' | 'EDROOMprioMINIMUM';
+/**
+ * Prioridad de los componentes.
+ */
+export type ComponentPriority =
+  | 'EDROOMprioURGENT'
+  | 'EDROOMprioVeryHigh'
+  | 'EDROOMprioHigh'
+  | 'EDROOMprioNormal'
+  | 'EDROOMprioLow'
+  | 'EDROOMprioVeryLow'
+  | 'EDROOMprioIDLE'
+  | 'EDROOMprioMINIMUM';
 
+/**
+ * Representa un mensaje asociado a un puerto de comunicación.
+ */
 export interface Message {
   signal: string;
   dataType: string;
   direction: 'entrada' | 'salida';
 }
 
+/**
+ * Representa un puerto de un componente.
+ */
 export interface PortData {
   id: string;
   name: string;
@@ -26,6 +48,9 @@ export interface PortData {
   interruptHandler?: string;
 }
 
+/**
+ * Representa un nodo (componente) del diagrama.
+ */
 export interface NodeData {
   name: string;
   ports: PortData[];
@@ -34,9 +59,12 @@ export interface NodeData {
   maxMessages: number;
   priority: ComponentPriority;
   stackSize: number;
-  isTop?: boolean; // ¡Atributo añadido aquí!
+  isTop?: boolean;
 }
 
+/**
+ * Tipos auxiliares para ReactFlow.
+ */
 export type Node<T = NodeData> = RFNode<T>;
 export type Edge = RFEdge;
 export type Connection = RFConnection;
