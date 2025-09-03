@@ -433,7 +433,9 @@ ${getMemoryFunctions}
         this.portCounter = {};
     }
 
-    private static getPortSuffix(portName: string): string {
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-expect-error
+    private static _getPortSuffix(portName: string): string {
         this.portCounter[portName] = (this.portCounter[portName] || 0) + 1;
         if (this.portCounter[portName] > 1) {
             return this.portCounter[portName].toString();
