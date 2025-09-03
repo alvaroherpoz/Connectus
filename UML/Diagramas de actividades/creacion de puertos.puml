@@ -1,0 +1,34 @@
+@startuml
+start
+
+:Usuario selecciona un componente;
+:Usuario abre el panel de puertos;
+
+partition "Creación de puerto" {
+    :Usuario elige tipo de puerto (nominal, conjugado, especial);
+    :App crea el puerto seleccionado;
+    :Usuario personaliza nombre del puerto;
+}
+
+if (¿Puerto de comunicación?) then (Sí)
+    partition "Personalización de mensajes" {
+        :Usuario añade mensaje al puerto;
+        :Usuario define nombre del mensaje;
+        :Usuario selecciona tipo de dato para el mensaje;
+        if (¿Tipo de dato personalizado?) then (Sí)
+            :Usuario define nuevo tipo de dato;
+            :App añade tipo de dato personalizado a la lista;
+        else (No)
+            :Usuario selecciona tipo de dato estándar;
+        endif
+        :App asocia mensaje y tipo de dato al puerto;
+        repeat
+            :Usuario añade más mensajes;
+        repeat while (desea añadir más mensajes?)
+    }
+endif
+
+:App actualiza el componente con los puertos (y mensajes si corresponde);
+
+stop
+@enduml

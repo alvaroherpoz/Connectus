@@ -1,0 +1,27 @@
+@startuml
+
+actor Usuario
+
+usecase "Crear componente" as UC1
+usecase "Editar atributos de componente" as UC2
+usecase "Añadir puerto" as UC3
+usecase "Conectar puertos" as UC4
+usecase "Eliminar puerto/conexión" as UC5
+usecase "Generar código fuente" as UC6
+usecase "Descargar proyecto ZIP" as UC7
+usecase "Guardar diagrama" as UC8
+usecase "Cargar diagrama" as UC9
+usecase "Ver notificaciones" as UC10
+
+Usuario --> UC1
+Usuario --> UC2
+Usuario --> UC3
+Usuario --> UC4
+Usuario --> UC5
+Usuario --> UC6
+Usuario --> UC7
+Usuario --> UC8
+Usuario --> UC9
+Usuario --> UC10
+
+@enduml

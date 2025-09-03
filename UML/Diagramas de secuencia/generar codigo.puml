@@ -1,0 +1,18 @@
+@startuml
+
+actor Usuario
+participant App
+participant CodeGenerator
+participant EdroomDeploymentHTemplate
+participant EdroomDeploymentCppTemplate
+participant IcuaswMmespProjectTemplate
+
+Usuario -> App : Clic en "Generar código"
+App -> CodeGenerator : generateCode(nodes, edges)
+CodeGenerator -> EdroomDeploymentHTemplate : generate(nodes, edges)
+CodeGenerator -> EdroomDeploymentCppTemplate : generate(nodes, edges)
+CodeGenerator -> IcuaswMmespProjectTemplate : generate(nodes, edges)
+CodeGenerator -> App : Código generado y ZIP listo
+App -> Usuario : Descarga ZIP
+
+@enduml

@@ -1,0 +1,37 @@
+@startuml
+
+package "Frontend React" {
+  [App]
+  [ComponentNode]
+  [ComponentAttributesPanel]
+  [PortInfoPanel]
+  [ContextMenu]
+  [NotificationBar]
+}
+
+package "Modelo de Datos" {
+  [NodeData]
+  [PortData]
+  [Message]
+  [Edge]
+}
+
+package "Generación de Código" {
+  [CodeGenerator]
+  [EdroomDeploymentHTemplate]
+  [EdroomDeploymentCppTemplate]
+  [IcuaswMmespProjectTemplate]
+}
+
+[App] --> [ComponentNode]
+[App] --> [ComponentAttributesPanel]
+[App] --> [PortInfoPanel]
+[App] --> [ContextMenu]
+[App] --> [NotificationBar]
+[App] --> [NodeData]
+[App] --> [Edge]
+[CodeGenerator] --> [EdroomDeploymentHTemplate]
+[CodeGenerator] --> [EdroomDeploymentCppTemplate]
+[CodeGenerator] --> [IcuaswMmespProjectTemplate]
+
+@enduml

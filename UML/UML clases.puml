@@ -1,0 +1,92 @@
+@startuml
+
+class App {
+  - nodes: NodeData[]
+  - edges: Edge[]
+  - selectedNode: NodeData
+  - selectedPort: PortData
+  + render()
+}
+
+class ComponentAttributesPanel {
+  - node: NodeData
+  + render()
+  + handleChange()
+}
+
+class CodeGenerator {
+  + generateCode(nodes: NodeData[], edges: Edge[]): void
+  + downloadZip(): void
+}
+
+class ComponentNode {
+  - node: NodeData
+  + render()
+}
+
+class ContextMenu {
+  - node: NodeData
+  + render()
+  + handleAction()
+}
+
+class NotificationBar {
+  - message: string
+  + render()
+}
+
+class PortInfoPanel {
+  - port: PortData
+  + render()
+}
+
+class NodeData {
+  - id: string
+  - type: string
+  - ports: PortData[]
+}
+
+class PortData {
+  - id: string
+  - name: string
+  - messages: Message[]
+}
+
+class Message {
+  - id: string
+  - name: string
+}
+
+class Edge {
+  - source: string
+  - target: string
+}
+
+class EdroomDeploymentHTemplate {
+  + generate(nodes: NodeData[], edges: Edge[]): string
+}
+class EdroomDeploymentCppTemplate {
+  + generate(nodes: NodeData[], edges: Edge[]): string
+}
+class IcuaswMmespProjectTemplate {
+  + generate(nodes: NodeData[], edges: Edge[]): string
+}
+
+App "1" *-- "many" NodeData
+App "1" *-- "many" Edge
+App o-- ComponentAttributesPanel
+App o-- ComponentNode
+App o-- ContextMenu
+App o-- NotificationBar
+App o-- PortInfoPanel
+
+NodeData "1" *-- "many" PortData
+PortData "1" *-- "many" Message
+
+CodeGenerator ..> NodeData
+CodeGenerator ..> Edge
+CodeGenerator ..> EdroomDeploymentHTemplate
+CodeGenerator ..> EdroomDeploymentCppTemplate
+CodeGenerator ..> IcuaswMmespProjectTemplate
+
+@enduml

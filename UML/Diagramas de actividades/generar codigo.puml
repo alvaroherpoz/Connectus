@@ -1,0 +1,14 @@
+@startuml
+start
+
+:Usuario hace clic en "Generar código";
+:App recopila nodos y conexiones;
+:App llama a CodeGenerator;
+:CodeGenerator invoca templates;
+:CodeGenerator genera archivos fuente;
+:CodeGenerator crea archivo ZIP;
+:App muestra opción de descarga;
+:Usuario descarga el ZIP;
+
+stop
+@enduml
