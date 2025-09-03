@@ -15,7 +15,7 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { saveAs } from 'file-saver';
-import './App.css';
+import '../types/App.css';
 
 import type { Node, Edge, Connection, EdgeChange, OnNodesChange, NodeData, PortData, NodeProps, NodeChange, Message } from './types';
 

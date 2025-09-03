@@ -4,7 +4,7 @@
  * Genera la lógica de inicialización, conexión y traducción de señales entre componentes.
  */
 
-import type { Node, NodeData, Edge, PortData } from '../../types';
+import type { Node, NodeData, Edge, PortData } from '../../components/types';
 
 /**
  * Clase que encapsula la generación del archivo .cpp de despliegue EDROOM.
@@ -22,7 +22,7 @@ export class edroomdeployment_cpp_template {
         const allNodes = nodes;
         const remoteNodes = nodes.filter(n => n.data.node !== localNodeName);
 
-        // 2. MainWait function
+        // 2. Funcion MainWait
         const mainWaitParams = allNodes.map(c => {
             const componentClass = this.getComponentClass(c, localNodeName);
             const instanceName = this.getInstanceName(c, localNodeName);
@@ -34,7 +34,7 @@ export class edroomdeployment_cpp_template {
             return `!${instanceName}.EDROOMIsComponentFinished()`;
         }).join('\n\t\t\t||');
 
-        // 3. SetMemory
+        // 3. Funcion SetMemory
         const setMemoryContent = allNodes.map(c => {
             const instanceName = this.getInstanceName(c, localNodeName);
             const maxMessages = c.data.maxMessages;
@@ -45,14 +45,14 @@ export class edroomdeployment_cpp_template {
                          ,${maxQueueNodes},${instanceName}QueueNodes, &${instanceName}QueueNodesMarks[0]);`;
         }).join('\n');
 
-        // 4. Component pointers initialization
+        // 4. Inicializacion de punteros de Componentes 
         const componentPointers = allNodes.map(c => {
             const componentClass = this.getComponentClass(c, localNodeName);
             const instanceName = this.getInstanceName(c, localNodeName);
             return `${componentClass} * CEDROOMSystemCommSAP::mp_${instanceName}=NULL;`;
         }).join('\n');
 
-        // 5. RemoteCommIRQBottomHalfTask logic
+        // 5. Funcion RemoteCommIRQBottomHalfTask 
         const remoteCommSwitches = remoteNodes.map(remoteCmp => {
             const remoteCmpId = remoteCmp.data.componentId;
 
@@ -88,7 +88,7 @@ ${interfaceCases}
                 break;`;
         }).join('');
 
-        // 6. SetComponents
+        // 6. Funcion SetComponents
         const allComponentsForSetComponents = allNodes.map(c => {
             const componentClass = this.getComponentClass(c, localNodeName);
             const instanceName = this.getInstanceName(c, localNodeName);
@@ -101,7 +101,7 @@ ${interfaceCases}
         }).join('\n\t');
 
 
-        // 7. Signal Translation Functions
+        // 7. Funciones Signal Translation 
         const nonTopConnections = edges.filter(conn => {
             const sourceNode = nodes.find(n => n.id === conn.source);
             const targetNode = nodes.find(n => n.id === conn.target);
@@ -120,7 +120,7 @@ ${interfaceCases}
             const port_target_name = targetPortName;
 
 
-            // getComponentSignals must be called with the specific port data
+            // getComponentSignals 
             const sourcePortData = sourceNode.data.ports.filter(p => p.name.replace(/\s/g, '') === sourcePortName);
             const targetPortData = targetNode.data.ports.filter(p => p.name.replace(/\s/g, '') === targetPortName);
 
@@ -168,7 +168,7 @@ TEDROOMSignal CEDROOMSystemCommSAP::C${targetNode.data.componentId}${targetName}
 `;
         }).join('\n');
         
-        // 9. SetLocalConnections
+        // 9. Funcion SetLocalConnections
         const localConnections = edges.filter(conn => {
             const sourceNode = nodes.find(n => n.id === conn.source);
             const targetNode = nodes.find(n => n.id === conn.target);
@@ -196,7 +196,7 @@ TEDROOMSignal CEDROOMSystemCommSAP::C${targetNode.data.componentId}${targetName}
                               C${targetNode.data.componentId}${targetName}_P${port_target_name}__C${sourceNode.data.componentId}${sourceName}_P${port_source_name});\n`;
         }).join('\n');
 
-        // 10. SetRemoteConnections
+        // 10. Funcion SetRemoteConnections
         const remoteConnections = edges.filter(conn => {
             const sourceNode = nodes.find(n => n.id === conn.source);
             const targetNode = nodes.find(n => n.id === conn.target);
@@ -230,16 +230,16 @@ TEDROOMSignal CEDROOMSystemCommSAP::C${targetNode.data.componentId}${targetName}
 
         }).join('\n\n');
 
-        // 11. StartComponents
+        // 11. Funcion StartComponents
         const startComponentsContent = allNodes.map(c => {
             const instanceName = this.getInstanceName(c, localNodeName);
             return `      mp_${instanceName}->EDROOMStart();`;
         }).join('\n');
 
-        // 12. MainWait call in Start()
+        // 12. MainWait en Start()
         const mainWaitCallParams = allNodes.map(c => `*mp_${this.getInstanceName(c, localNodeName)}`).join(',\n\t\t');
 
-        // 13. MainWait call in main_task()
+        // 13. MainWait en main_task()
         const mainTaskCallParams = allNodes.map(c => `*systemDeployment.mp_${this.getInstanceName(c, localNodeName)}`).join(',\n\t\t');
 
         return `//##############################################################################

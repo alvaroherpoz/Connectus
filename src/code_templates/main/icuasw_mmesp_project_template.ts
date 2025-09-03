@@ -3,7 +3,7 @@
  * Plantilla para generar el archivo principal (.cpp) del proyecto EDROOM.
  * Genera las inclusiones, instancias y configuración de los componentes para el despliegue.
  */
-import type { Node, NodeData } from '../../types';
+import type { Node, NodeData } from '../../components/types';
 
 /**
  * Clase que encapsula la generación del archivo principal del proyecto EDROOM.

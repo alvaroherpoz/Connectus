@@ -5,7 +5,7 @@
 
 import React from 'react';
 import type { PortData } from './types';
-import './PortInfoPanel.css';
+import '../types/PortInfoPanel.css';
 
 /**
  * Props del panel de información del puerto.

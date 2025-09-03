@@ -5,7 +5,7 @@
  */
 
 import React from 'react';
-import './AboutModal.css';
+import '../types/AboutModal.css';
 
 /**
  * Props del modal informativo.

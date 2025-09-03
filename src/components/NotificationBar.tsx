@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import './NotificationBar.css';
+import '../types/NotificationBar.css';
 
 /**
  * Props del componente NotificationBar.

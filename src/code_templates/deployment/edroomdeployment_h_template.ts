@@ -3,7 +3,7 @@
  * Plantilla para generar el archivo header (.h) de despliegue EDROOM.
  * Genera las declaraciones, estructuras y funciones necesarias para la inicialización y conexión de componentes.
  */
-import type { Node, NodeData, Edge } from '../../types';
+import type { Node, NodeData, Edge } from '../../components/types';
 
 /**
  * Clase que encapsula la generación del archivo header de despliegue EDROOM.
@@ -431,6 +431,14 @@ ${getMemoryFunctions}
      */
     private static resetPortCounter(): void {
         this.portCounter = {};
+    }
+
+    private static getPortSuffix(portName: string): string {
+        this.portCounter[portName] = (this.portCounter[portName] || 0) + 1;
+        if (this.portCounter[portName] > 1) {
+            return this.portCounter[portName].toString();
+        }
+        return '';
     }
     
     /**

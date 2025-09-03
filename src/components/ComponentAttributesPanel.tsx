@@ -6,7 +6,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import type { NodeData, ComponentPriority } from './types';
-import './ComponentAttributesPanel.css';
+import '../types/ComponentAttributesPanel.css';
 
 /**
  * Props del panel de atributos del componente.

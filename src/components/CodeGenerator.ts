@@ -6,10 +6,9 @@
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import type { Node, NodeData, Edge } from './types';
-import { icuasw_mmesp_project_template } from './code_templates/main/icuasw_mmesp_project_template';
-import { edroomdeployment_h_template } from './code_templates/deployment/edroomdeployment_h_template';
-import { edroomdeployment_cpp_template } from './code_templates/deployment/edroomdeployment_cpp_template';
-
+import { icuasw_mmesp_project_template } from '../code_templates/main/icuasw_mmesp_project_template';
+import { edroomdeployment_h_template } from '../code_templates/deployment/edroomdeployment_h_template';
+import { edroomdeployment_cpp_template } from '../code_templates/deployment/edroomdeployment_cpp_template';
 /**
  * Clase estática para la generación y descarga de código fuente.
  */

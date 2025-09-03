@@ -8,7 +8,7 @@ import React, { memo, useCallback } from 'react';
 import { Handle, Position } from 'reactflow';
 import type { NodeProps } from 'reactflow';
 import type { NodeData, PortData } from './types';
-import './ComponentNode.css';
+import '../types/ComponentNode.css';
 
 /**
  * Props del componente ComponentNode.

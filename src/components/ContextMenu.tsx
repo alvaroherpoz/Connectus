@@ -7,7 +7,7 @@
 import React, { useState, useCallback } from 'react';
 import type { ChangeEvent, FormEvent } from 'react';
 import type { Message, Node, NodeData } from './types';
-import './ContextMenu.css';
+import '../types/ContextMenu.css';
 
 /**
  * Props del componente ContextMenu.
@@ -26,6 +26,9 @@ interface ContextMenuProps {
     dataTypes: string[];
 }
 
+/**
+ * Tipos de datos Basicos de EDROOM.
+ */
 const fixedDataTypesList = [
     'CDEventList', 'CDRecovAction', 'CDSensorTMBufferStatus', 'CDTCDescriptor', 'CDTMList',
     'CDTMMemory', 'Pr_Time', 'TEDROOMBool', 'TEDROOMByte', 'TEDROOMDouble', 'TEDROOMFloat', 'TEDROOMInt8',
