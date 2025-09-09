@@ -6,7 +6,7 @@
 
 import React, { useState, useCallback } from 'react';
 import type { ChangeEvent, FormEvent } from 'react';
-import type { Message, Node, NodeData, MessageType, PortData } from './types';
+import type { Message, Node, NodeData, MessageType} from './types';
 import '../types/ContextMenu.css';
 
 /**
@@ -68,24 +68,59 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
      * Añade un mensaje al puerto de comunicación.
      */
     const handleAddMessage = useCallback(() => {
-        // Si el tipo de mensaje es 'reply', validamos que exista un 'invoke' con la misma señal
-        if (messageType === 'reply') {
-            const invokeExists = messages.some(msg =>
-                msg.type === 'invoke' && msg.signal === messageSignal
-            );
-            if (!invokeExists) {
-                setNotification({ message: 'Un mensaje de tipo "reply" requiere un mensaje "invoke" con la misma señal.', type: 'error' });
-                return;
-            }
-        }
-    
-        if (messageSignal && messageDataType) {
-            setMessages((prevMessages) => [...prevMessages, { signal: messageSignal, dataType: messageDataType, direction: messageDirection, type: messageType }]);
-            setMessageSignal('');
-            setMessageDataType('');
-            setNotification(null);
-        }
-    }, [messageSignal, messageDataType, messageDirection, messageType, messages, setNotification]);
+         if (!messageSignal || !messageDataType) {
+             return; // No-op if fields are empty
+         }
+ 
+         // --- VALIDATION ---
+         if (messageType === 'invoke' || messageType === 'async') {
+             // Check for duplicates in existing ports
+             const isDuplicateInExistingPorts = nodes.some(node =>
+                 node.data.ports.some(p =>
+                     p.protocolName === protocolName && p.messages?.some(m => m.signal === messageSignal)
+                 )
+             );
+             // Check for duplicates in the messages being added to the new port
+             const isDuplicateInNewMessages = messages.some(m => m.signal === messageSignal);
+ 
+             if (isDuplicateInExistingPorts || isDuplicateInNewMessages) {
+                 setNotification({ message: `Error: Ya existe un mensaje con la señal "${messageSignal}" en el protocolo "${protocolName}".`, type: 'error' });
+                 return;
+             }
+         }
+ 
+         if (messageType === 'reply') {
+             // Check if an invoke exists in the protocol (existing ports + new port messages)
+             const invokeExists = nodes.some(node =>
+                 node.data.ports.some(p =>
+                     p.protocolName === protocolName && p.messages?.some(m => m.type === 'invoke' && m.signal === messageSignal)
+                 )
+             ) || messages.some(m => m.type === 'invoke' && m.signal === messageSignal);
+ 
+             if (!invokeExists) {
+                 setNotification({ message: `Un mensaje de tipo "reply" requiere un mensaje "invoke" con la misma señal en el protocolo "${protocolName}".`, type: 'error' });
+                 return;
+             }
+ 
+             // Check if a reply already exists for this signal
+             const replyExists = nodes.some(node =>
+                 node.data.ports.some(p =>
+                     p.protocolName === protocolName && p.messages?.some(m => m.type === 'reply' && m.signal === messageSignal)
+                 )
+             ) || messages.some(m => m.type === 'reply' && m.signal === messageSignal);
+ 
+             if (replyExists) {
+                 setNotification({ message: `Error: Ya existe un "reply" para la señal "${messageSignal}" en el protocolo "${protocolName}".`, type: 'error' });
+                 return;
+             }
+         }
+ 
+         // --- ADD LOGIC ---
+         setMessages(prev => [...prev, { signal: messageSignal, dataType: messageDataType, direction: messageDirection, type: messageType }]);
+         setMessageSignal('');
+         setMessageDataType('');
+         setNotification(null); // Clear previous error notifications
+     }, [messageSignal, messageDataType, messageDirection, messageType, messages, protocolName, nodes, setNotification]);
 
     /**
      * Elimina un mensaje del listado.
@@ -146,28 +181,19 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
             return;
         }
 
-        // Validación 3: Unicidad del ID y nombre a nivel de PROTOCOLO
-        const isDuplicateInProtocol = nodes.some(node =>
-            node.data.ports.some(p =>
-                (p.protocolName === trimmedProtocolName) && // Mismo protocolo
-                (p.id === trimmedId) // Mismo ID
-            )
-        );
+        // Validación 3: Unicidad del ID y nombre a nivel de COMPONENTE
+        const targetNode = nodes.find(node => node.id === nodeId);
+        if (!targetNode) return;
 
-        if (isDuplicateInProtocol) {
-            setNotification({ message: `Ya existe un puerto con el ID "${trimmedId}" en el protocolo "${trimmedProtocolName}".`, type: 'error' });
+        const isDuplicateId = targetNode.data.ports.some(p => p.id === trimmedId);
+        if (isDuplicateId) {
+            setNotification({ message: `Ya existe un puerto con el ID "${trimmedId}" en este componente.`, type: 'error' });
             return;
         }
 
-        const isDuplicateName = nodes.some(node =>
-            node.data.ports.some(p =>
-                (p.protocolName === trimmedProtocolName) && // Mismo protocolo
-                (p.name === trimmedName) // Mismo nombre
-            )
-        );
-
+        const isDuplicateName = targetNode.data.ports.some(p => p.name === trimmedName);
         if (isDuplicateName) {
-            setNotification({ message: `Ya existe un puerto con el nombre "${trimmedName}" en el protocolo "${trimmedProtocolName}".`, type: 'error' });
+            setNotification({ message: `Ya existe un puerto con el nombre "${trimmedName}" en este componente.`, type: 'error' });
             return;
         }
         

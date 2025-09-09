@@ -442,91 +442,76 @@ const App: React.FC = () => {
    */
   const handleUpdatePortMessages = useCallback((nodeId: string, portId: string, newMessages: Message[]) => {
     setNodes(prevNodes => {
-      const nodeToUpdate = prevNodes.find(n => n.id === nodeId);
-      if (!nodeToUpdate) return prevNodes;
-
-      const currentPort = nodeToUpdate.data.ports.find(p => p.id === portId);
-      if (!currentPort) return prevNodes;
-      
-      const deletedMessages = currentPort.messages?.filter(
-          currentMsg => !newMessages.some(newMsg => newMsg.signal === currentMsg.signal)
+      // Buscar la conexión del puerto que se está editando
+      const connection = edges.find(edge => 
+        (edge.source === nodeId && edge.sourceHandle === portId) || 
+        (edge.target === nodeId && edge.targetHandle === portId)
       );
 
-      if (deletedMessages && deletedMessages.length > 0) {
-          const deletedInvokes = deletedMessages.filter(msg => msg.type === 'invoke');
-
-          if (deletedInvokes.length > 0) {
-            const deletedInvokeSignal = deletedInvokes[0].signal;
-
-            const relatedPort = prevNodes
-                .flatMap(n => n.data.ports)
-                .find(p => p.id !== currentPort.id && p.protocolName === currentPort.protocolName);
-
-            if (relatedPort) {
-                const updatedRelatedMessages = relatedPort.messages?.filter(
-                    msg => !(msg.type === 'reply' && msg.signal === deletedInvokeSignal)
-                ) || [];
-
-                const updatedNodesWithRelatedPort = prevNodes.map(n => {
-                    if (n.id === relatedPort.id.split('-')[0]) {
-                        return {
-                            ...n,
-                            data: {
-                                ...n.data,
-                                ports: n.data.ports.map(p => 
-                                    p.id === relatedPort.id ? { ...p, messages: updatedRelatedMessages } : p
-                                )
-                            }
-                        };
-                    }
-                    return n;
-                });
-                
-                return updatedNodesWithRelatedPort.map(n => {
-                    if (n.id === nodeId) {
-                        return {
-                            ...n,
-                            data: {
-                                ...n.data,
-                                ports: n.data.ports.map(p => 
-                                    p.id === portId ? { ...p, messages: newMessages } : p
-                                )
-                            }
-                        };
-                    }
-                    return n;
-                });
-            }
+      // Si no hay conexión, solo se actualiza el puerto actual
+      if (!connection) {
+        return prevNodes.map(node => {
+          if (node.id === nodeId) {
+            return {
+              ...node,
+              data: {
+                ...node.data,
+                ports: node.data.ports.map(p => (p.id === portId ? { ...p, messages: newMessages } : p)),
+              },
+            };
           }
+          return node;
+        });
       }
-      
-      return prevNodes.map(n => {
-          if (n.id === nodeId) {
-              return {
-                  ...n,
-                  data: {
-                      ...n.data,
-                      ports: n.data.ports.map(p =>
-                          p.id === portId ? { ...p, messages: newMessages } : p
-                      ),
-                  },
-              };
-          }
-          return n;
+
+      // Si hay conexión, se sincronizan ambos puertos
+      const isSource = connection.source === nodeId;
+      const connectedNodeId = isSource ? connection.target : connection.source;
+      const connectedPortId = isSource ? connection.targetHandle : connection.sourceHandle;
+
+      // Los mensajes del puerto conectado son un "espejo" de los del puerto editado
+      const mirroredMessages: Message[] = newMessages.map(msg => ({
+        ...msg,
+        direction: msg.direction === 'entrada' ? 'salida' : 'entrada',
+      }));
+
+      // Actualizar ambos puertos en el estado de los nodos
+      return prevNodes.map(node => {
+        // Actualizar el puerto principal
+        if (node.id === nodeId) {
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              ports: node.data.ports.map(p => (p.id === portId ? { ...p, messages: newMessages } : p)),
+            },
+          };
+        }
+        // Actualizar el puerto conectado
+        if (node.id === connectedNodeId) {
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              ports: node.data.ports.map(p => (p.id === connectedPortId ? { ...p, messages: mirroredMessages } : p)),
+            },
+          };
+        }
+        return node;
       });
     });
-    setNotification({ message: 'Mensajes del puerto actualizados con éxito.', type: 'success' });
-    setSelectedPort(null);
-  }, [setNodes, setNotification]);
+
+    setNotification({ message: 'Mensajes del puerto actualizados y sincronizados con el puerto conectado.', type: 'success' });
+  }, [setNodes, edges, setNotification]);
   
   /**
    * Actualiza el ID y el nombre de un puerto.
    */
-  const handleUpdatePortId = useCallback((nodeId: string, oldPortId: string, newPortId: string, newPortName: string) => {
+  const handleUpdatePortId = useCallback((nodeId: string, oldPortId: string, newPortId: string, newPortName: string): boolean => {
     // Validación: El ID del puerto debe ser solo números
     if (!/^\d+$/.test(newPortId)) {
       setNotification({ message: 'Error: El ID del puerto debe contener solo números.', type: 'error' });
-      return;
+      return false;
     }
     
     // Validar si el nuevo ID ya existe en el mismo nodo
@@ -535,7 +520,7 @@ const App: React.FC = () => {
     );
     if (isDuplicateId) {
         setNotification({ message: `Error: Ya existe un puerto con el ID "${newPortId}" en este componente.`, type: 'error' });
-        return;
+        return false;
     }
 
     // Validar si el nuevo nombre ya existe en el mismo nodo
@@ -544,43 +529,59 @@ const App: React.FC = () => {
     );
     if (isDuplicateName) {
         setNotification({ message: `Error: Ya existe un puerto con el nombre "${newPortName}" en este componente.`, type: 'error' });
-        return;
+        return false;
     }
 
     // Actualizar los nodos
-    setNodes(prevNodes => prevNodes.map(node => {
+    setNodes(prevNodes => {
+      let updatedNodes = [...prevNodes];
+
+      // Buscar la conexión antes de realizar cambios
+      const connection = edges.find(edge => 
+        (edge.source === nodeId && edge.sourceHandle === oldPortId) || 
+        (edge.target === nodeId && edge.targetHandle === oldPortId)
+      );
+
+      // Actualizar todos los nodos relevantes
+      updatedNodes = updatedNodes.map(node => {
+        // Actualizar el puerto principal
         if (node.id === nodeId) {
-            const updatedPorts = node.data.ports.map(p => {
-                if (p.id === oldPortId) {
-                    return { ...p, id: newPortId, name: newPortName };
-                }
-                return p;
-            });
-            return {
-                ...node,
-                data: {
-                    ...node.data,
-                    ports: updatedPorts
-                }
-            };
+          const updatedPorts = node.data.ports.map(p => 
+            p.id === oldPortId ? { ...p, id: newPortId, name: newPortName } : p
+          );
+          return { ...node, data: { ...node.data, ports: updatedPorts } };
         }
+
+        // Actualizar el nombre del puerto conectado
+        if (connection && node.id === (connection.source === nodeId ? connection.target : connection.source)) {
+          const connectedPortId = connection.source === nodeId ? connection.targetHandle : connection.sourceHandle;
+          const updatedPorts = node.data.ports.map(p => 
+            p.id === connectedPortId ? { ...p, name: newPortName } : p
+          );
+          return { ...node, data: { ...node.data, ports: updatedPorts } };
+        }
+
         return node;
-    }));
+      });
+
+      return updatedNodes;
+    });
 
     // Actualizar las conexiones si el ID del puerto ha cambiado
-    setEdges(prevEdges => prevEdges.map(edge => {
-        if (edge.sourceHandle === oldPortId) {
-            return { ...edge, sourceHandle: newPortId };
-        }
-        if (edge.targetHandle === oldPortId) {
-            return { ...edge, targetHandle: newPortId };
-        }
-        return edge;
-    }));
+    if (oldPortId !== newPortId) {
+      setEdges(prevEdges => prevEdges.map(edge => {
+          if (edge.source === nodeId && edge.sourceHandle === oldPortId) {
+              return { ...edge, sourceHandle: newPortId };
+          }
+          if (edge.target === nodeId && edge.targetHandle === oldPortId) {
+              return { ...edge, targetHandle: newPortId };
+          }
+          return edge;
+      }));
+    }
 
-    setNotification({ message: `Puerto "${oldPortId}" actualizado a "${newPortId}" con éxito.`, type: 'success' });
-    
-  }, [setNodes, setEdges, nodes, setNotification]);
+    return true;
+  }, [setNodes, setEdges, nodes, edges, setNotification]);
 
 
   /**

@@ -102,13 +102,7 @@ ${interfaceCases}
 
 
         // 7. Funciones Signal Translation 
-        const nonTopConnections = edges.filter(conn => {
-            const sourceNode = nodes.find(n => n.id === conn.source);
-            const targetNode = nodes.find(n => n.id === conn.target);
-            return sourceNode && targetNode && !sourceNode.data.isTop && !targetNode.data.isTop;
-        });
-        
-        const signalTranslations = nonTopConnections.map(conn => {
+        const signalTranslations = edges.map(conn => {
             const sourceNode = nodes.find(n => n.id === conn.source)!;
             const targetNode = nodes.find(n => n.id === conn.target)!;
             const sourceName = sourceNode.data.name.replace(/\s/g, '');
@@ -172,7 +166,7 @@ TEDROOMSignal CEDROOMSystemCommSAP::C${targetNode.data.componentId}${targetName}
         const localConnections = edges.filter(conn => {
             const sourceNode = nodes.find(n => n.id === conn.source);
             const targetNode = nodes.find(n => n.id === conn.target);
-            return sourceNode && targetNode && sourceNode.data.node === localNodeName && targetNode.data.node === localNodeName && !sourceNode.data.isTop && !targetNode.data.isTop;
+            return sourceNode && targetNode && sourceNode.data.node === localNodeName && targetNode.data.node === localNodeName;
         });
 
         const setLocalConnectionsContent = localConnections.map((conn, index) => {
@@ -200,7 +194,7 @@ TEDROOMSignal CEDROOMSystemCommSAP::C${targetNode.data.componentId}${targetName}
         const remoteConnections = edges.filter(conn => {
             const sourceNode = nodes.find(n => n.id === conn.source);
             const targetNode = nodes.find(n => n.id === conn.target);
-            return sourceNode && targetNode && sourceNode.data.node !== targetNode.data.node;
+            return sourceNode && targetNode && sourceNode.data.node !== targetNode.data.node && !sourceNode.data.isTop && !targetNode.data.isTop;
         });
 
         const setRemoteConnectionsContent = remoteConnections.map((conn, index) => {

@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useCallback, useEffect } from 'react';
-import type { ChangeEvent, FormEvent } from 'react';
+import type { ChangeEvent } from 'react';
 import type { Message, MessageType, PortData, Node, NodeData } from './types';
 import '../types/PortInfoPanel.css';
 
@@ -18,7 +18,7 @@ interface PortInfoPanelProps {
     onClose: () => void;
     onUpdatePortMessages: (nodeId: string, portId: string, newMessages: Message[]) => void;
     // Nueva función para actualizar el ID y el nombre del puerto
-    onUpdatePortId: (nodeId: string, oldPortId: string, newPortId: string, newPortName: string) => void;
+    onUpdatePortId: (nodeId: string, oldPortId: string, newPortId: string, newPortName: string) => boolean;
     dataTypes: string[];
     setNotification: (notification: { message: string; type: 'success' | 'error' | 'info' } | null) => void;
     handleAddDataType: (newType: string) => void;
@@ -100,42 +100,65 @@ const PortInfoPanel: React.FC<PortInfoPanelProps> = ({
      * Añade un nuevo mensaje o actualiza uno existente.
      */
     const handleSaveMessage = useCallback(() => {
-        if (!messageSignal || !messageDataType) {
-            setNotification({ message: 'La señal y el tipo de dato son obligatorios.', type: 'error' });
-            return;
-        }
-
-        // Validación para 'reply' basada en el protocolo
-        if (messageType === 'reply') {
-            if (!invokeMessageExistsInProtocol(messageSignal)) {
-                setNotification({ message: 'Un mensaje de tipo "reply" requiere un mensaje "invoke" con la misma señal en el mismo protocolo.', type: 'error' });
-                return;
-            }
-        }
-
-        const newMessage: Message = {
-            signal: messageSignal,
-            dataType: messageDataType,
-            direction: messageDirection,
-            type: messageType
-        };
-
-        if (editingMessageIndex !== null) {
-            const updatedMessages = [...messages];
-            updatedMessages[editingMessageIndex] = newMessage;
-            setMessages(updatedMessages);
-        } else {
-            const messageExists = messages.some(msg => msg.signal === messageSignal);
-            if (messageExists) {
-                setNotification({ message: 'Error: Ya existe un mensaje con esta señal en este puerto.', type: 'error' });
-                return;
-            }
-            setMessages((prevMessages) => [...prevMessages, newMessage]);
-        }
-        
-        resetMessageForm();
-        setNotification({ message: 'Mensaje guardado con éxito.', type: 'success' });
-    }, [messageSignal, messageDataType, messageDirection, messageType, messages, editingMessageIndex, setNotification, invokeMessageExistsInProtocol]);
+         if (!messageSignal || !messageDataType) {
+             setNotification({ message: 'La señal y el tipo de dato son obligatorios.', type: 'error' });
+             return;
+         }
+ 
+         // --- VALIDATION ---
+         // Check for duplicates across the entire protocol.
+         for (const node of nodes) {
+             for (const p of node.data.ports) {
+                 // Only check ports within the same protocol
+                 if (p.protocolName === port.protocolName && p.messages) {
+                     for (let i = 0; i < p.messages.length; i++) {
+                         const msg = p.messages[i];
+                         
+                         // Skip the message we are currently editing
+                         const isEditingThisMessage = (node.id === nodeId && p.id === port.id && i === editingMessageIndex);
+                         if (isEditingThisMessage) {
+                             continue;
+                         }
+ 
+                         // If the signal name is the same...
+                         if (msg.signal === messageSignal) {
+                             // It's a duplicate if we are adding an invoke/async and any other message already exists with that signal.
+                             if (messageType === 'invoke' || messageType === 'async') {
+                                 setNotification({ message: `Error: Ya existe un mensaje con la señal "${messageSignal}" en este protocolo.`, type: 'error' });
+                                 return;
+                             }
+                             // It's a duplicate if we are adding a reply and a reply already exists.
+                             if (messageType === 'reply' && msg.type === 'reply') {
+                                 setNotification({ message: `Error: Ya existe un "reply" para la señal "${messageSignal}" en este protocolo.`, type: 'error' });
+                                 return;
+                             }
+                         }
+                     }
+                 }
+             }
+         }
+ 
+         // If the message is a 'reply', ensure a corresponding 'invoke' exists.
+         if (messageType === 'reply') {
+             if (!invokeMessageExistsInProtocol(messageSignal)) {
+                 setNotification({ message: 'Un mensaje de tipo "reply" requiere un mensaje "invoke" con la misma señal en el mismo protocolo.', type: 'error' });
+                 return;
+             }
+         }
+ 
+         const newMessage: Message = { signal: messageSignal, dataType: messageDataType, direction: messageDirection, type: messageType };
+ 
+         if (editingMessageIndex !== null) {
+             const updatedMessages = [...messages];
+             updatedMessages[editingMessageIndex] = newMessage;
+             setMessages(updatedMessages);
+         } else {
+             setMessages((prevMessages) => [...prevMessages, newMessage]);
+         }
+         
+         resetMessageForm();
+         setNotification({ message: 'Mensaje guardado con éxito.', type: 'success' });
+     }, [messageSignal, messageDataType, messageDirection, messageType, messages, editingMessageIndex, setNotification, invokeMessageExistsInProtocol, nodes, port.protocolName, nodeId, port.id]);
 
     /**
      * Rellena el formulario con los datos de un mensaje para editarlo.
@@ -156,21 +179,27 @@ const PortInfoPanel: React.FC<PortInfoPanelProps> = ({
         const messageToDelete = messages[index];
         let updatedMessages = [...messages];
 
+        // Si se elimina un mensaje 'invoke', también se debe eliminar su 'reply' correspondiente.
         if (messageToDelete.type === 'invoke') {
             const replyIndex = updatedMessages.findIndex(
                 (msg, i) => i !== index && msg.type === 'reply' && msg.signal === messageToDelete.signal
             );
+
             if (replyIndex !== -1) {
+                // Filtra tanto el 'invoke' como el 'reply'.
                 updatedMessages = updatedMessages.filter((_, i) => i !== index && i !== replyIndex);
             } else {
+                // Si no se encuentra 'reply', solo elimina el 'invoke'.
                 updatedMessages = updatedMessages.filter((_, i) => i !== index);
             }
         } else {
+            // Para 'async' o 'reply', solo elimina el mensaje seleccionado.
             updatedMessages = updatedMessages.filter((_, i) => i !== index);
         }
 
         setMessages(updatedMessages);
-        setNotification({ message: 'Mensaje eliminado.', type: 'success' });
+        // Notificar al usuario que debe guardar para aplicar los cambios y sincronizar
+        setNotification({ message: 'Mensaje eliminado. Guarde los cambios para aplicar la sincronización de los mensajes en el protocolo.', type: 'info' });
         resetMessageForm();
     }, [messages, setNotification]);
 
@@ -196,31 +225,17 @@ const PortInfoPanel: React.FC<PortInfoPanelProps> = ({
             return;
         }
 
-        // Obtener una lista de todos los demás puertos en el mismo protocolo, excluyendo el actual.
-        const otherPortsInProtocol = nodes.flatMap(node => node.data.ports)
-            .filter(p => p.protocolName === port.protocolName && p.id !== port.id);
+        // Llamar a la función de actualización que ahora devuelve un booleano
+        const success = onUpdatePortId(nodeId, port.id, trimmedId, trimmedName);
 
-        // Validación de unicidad del ID
-        const isDuplicateIdInProtocol = otherPortsInProtocol.some(p => p.id === trimmedId);
-        if (isDuplicateIdInProtocol) {
-            setNotification({ message: `Ya existe un puerto con el ID "${trimmedId}" en el protocolo "${port.protocolName}".`, type: 'error' });
-            return;
+        if (success) {
+            if (port.type === 'comunicacion') {
+                onUpdatePortMessages(nodeId, trimmedId, messages);
+            }
+            setNotification({ message: 'Cambios guardados con éxito.', type: 'success' });
+            onClose();
         }
-
-        // Validación de unicidad del nombre
-        const isDuplicateNameInProtocol = otherPortsInProtocol.some(p => p.name === trimmedName);
-        if (isDuplicateNameInProtocol) {
-            setNotification({ message: `Ya existe un puerto con el nombre "${trimmedName}" en el protocolo "${port.protocolName}".`, type: 'error' });
-            return;
-        }
-
-        // Si todas las validaciones pasan, se procede a guardar los cambios
-        onUpdatePortId(nodeId, port.id, trimmedId, trimmedName);
-        onUpdatePortMessages(nodeId, trimmedId, messages);
-        
-        setNotification({ message: 'Cambios guardados con éxito.', type: 'success' });
-        // No cerramos el panel para permitir más ediciones.
-    }, [onUpdatePortId, onUpdatePortMessages, nodeId, port, editedPortId, editedPortName, messages, setNotification, nodes]);
+    }, [onUpdatePortId, onUpdatePortMessages, nodeId, port, editedPortId, editedPortName, messages, setNotification, onClose]);
 
     /**
      * Maneja el cambio del tipo de dato y muestra el campo de entrada si es "other".
@@ -250,37 +265,48 @@ const PortInfoPanel: React.FC<PortInfoPanelProps> = ({
 
     return (
         <div className="port-info-panel">
-            <div className="panel-header">
-                {/* Ahora el nombre del puerto es un campo editable */}
-                <input
-                    type="text"
-                    value={editedPortName}
-                    onChange={(e) => setEditedPortName(e.target.value)}
-                    className="port-name-input"
-                    title="Nombre del puerto"
-                />
-                <button className="close-button" onClick={onClose}>&times;</button>
+            <div className="port-info-header">
+                <h4>Detalles del Puerto</h4>
             </div>
-            <div className="panel-content">
+            <div className="port-info-body">
                 <div className="port-details-section">
-                    <div className="port-detail-row">
-                        <span>ID:</span>
-                        {/* Campo para editar el ID del puerto */}
+                    <div className="form-row">
+                        <label htmlFor="port-name-input">Nombre del Puerto</label>
                         <input
+                            id="port-name-input"
+                            type="text"
+                            value={editedPortName}
+                            onChange={(e) => setEditedPortName(e.target.value)}
+                            className="port-info-name-input"
+                            title="Nombre descriptivo del puerto"
+                        />
+                        <small className="form-help-text">Nombre descriptivo para identificar la funcionalidad del puerto.</small>
+                    </div>
+                    <div className="form-row">
+                        <label htmlFor="port-id-input">ID del Puerto</label>
+                        <input
+                            id="port-id-input"
                             type="text"
                             value={editedPortId}
                             onChange={(e) => setEditedPortId(e.target.value)}
-                            className="port-id-input"
-                            title="ID único del puerto"
+                            className="port-info-id-input"
+                            title="ID único del puerto en este componente"
                         />
+                        <small className="form-help-text">ID numérico único dentro de este componente.</small>
                     </div>
                 </div>
-                <p><strong>Tipo:</strong> {port.type}</p>
-                {port.subtype && <p><strong>Subtipo:</strong> {port.subtype}</p>}
-                {port.protocolName && <p><strong>Protocolo:</strong> {port.protocolName}</p>}
+                <div className="port-static-details">
+                    <div className="form-row">
+                        <label>Tipo</label>
+                        <span>{port.type}</span>
+                    </div>
+                    {port.subtype && <div className="form-row"><label>Subtipo</label><span>{port.subtype}</span></div>}
+                    {port.protocolName && <div className="form-row"><label>Protocolo</label><span>{port.protocolName}</span></div>}
+                </div>
+ 
                 {port.interruptHandler && (
                     <div className="interrupt-handler-display">
-                        <strong>Handler:</strong>
+                        <label>Handler</label>
                         <pre>{port.interruptHandler}</pre>
                     </div>
                 )}
@@ -288,11 +314,11 @@ const PortInfoPanel: React.FC<PortInfoPanelProps> = ({
                 {port.type === 'comunicacion' && (
                     <div className="messages-section">
                         <h4>Mensajes</h4>
-                        <div className="message-list">
+                        <div className="message-list-container">
                             {messages.length > 0 ? (
                                 messages.map((msg, index) => (
                                     <div key={index} className="message-item">
-                                        <span>{msg.signal} - {msg.dataType} ({msg.direction}) [{msg.type}]</span>
+                                        <span className="message-details">{msg.signal} - {msg.dataType} ({msg.direction}) [{msg.type}]</span>
                                         <div className="message-actions">
                                             <button onClick={() => handleEditMessage(index)}>Editar</button>
                                             <button onClick={() => handleDeleteMessage(index)}>Eliminar</button>
@@ -300,56 +326,35 @@ const PortInfoPanel: React.FC<PortInfoPanelProps> = ({
                                     </div>
                                 ))
                             ) : (
-                                <p>No hay mensajes en este puerto.</p>
+                                <p className="no-messages-notice">No hay mensajes en este puerto.</p>
                             )}
                         </div>
-                        <div className="add-message-container">
+                        <div className="message-form-container">
                             <h5>{editingMessageIndex !== null ? 'Editar Mensaje' : 'Añadir Nuevo Mensaje'}</h5>
-                            <input
-                                id="message-signal"
-                                type="text"
-                                placeholder="Señal"
-                                value={messageSignal}
-                                onChange={(e: ChangeEvent<HTMLInputElement>) => setMessageSignal(e.target.value)}
-                            />
-                            <select id="message-data-type" value={messageDataType} onChange={handleDataTypeChange} title="Tipo de Dato">
-                                <option value="">Tipo de Dato</option>
-                                <option value="void">void (sin dato)</option>
-                                {fixedDataTypesList.map((dt) => (
-                                    <option key={dt} value={dt}>{dt}</option>
-                                ))}
-                                {dataTypes.map((dt) => (
-                                    <option key={dt} value={dt}>{dt}</option>
-                                ))}
-                                <option value="other">Otro tipo de dato...</option>
-                            </select>
-                            <select id="message-direction" value={messageDirection} onChange={(e: ChangeEvent<HTMLSelectElement>) => setMessageDirection(e.target.value as 'entrada' | 'salida')} title="Dirección del Mensaje">
-                                <option value="entrada">Entrada</option>
-                                <option value="salida">Salida</option>
-                            </select>
-                            <select id="message-type" value={messageType} onChange={(e: ChangeEvent<HTMLSelectElement>) => setMessageType(e.target.value as MessageType)} title="Tipo de Mensaje">
-                                <option value="invoke">invoke</option>
-                                <option value="async">async</option>
-                                <option value="reply" disabled={!invokeMessageExistsInProtocol(messageSignal)}>reply</option>
-                            </select>
-                            <button type="button" onClick={handleSaveMessage}>{editingMessageIndex !== null ? 'Guardar Cambios' : 'Añadir'}</button>
-                            {editingMessageIndex !== null && <button type="button" onClick={resetMessageForm}>Cancelar</button>}
-                        </div>
-                        {showNewDataTypeInput && (
-                            <div className="add-data-type-container">
-                                <input
-                                    type="text"
-                                    placeholder="Nuevo Tipo de Dato"
-                                    value={newDataTypeName}
-                                    onChange={(e) => setNewDataTypeName(e.target.value)}
-                                />
-                                <button type="button" onClick={handleAddNewDataType}>Añadir Tipo</button>
+                            <div className="form-grid">
+                                <div className="form-field"><label htmlFor="message-signal">Señal</label><input id="message-signal" type="text" placeholder="Ej: S_Data" value={messageSignal} onChange={(e: ChangeEvent<HTMLInputElement>) => setMessageSignal(e.target.value)} /></div>
+                                <div className="form-field"><label htmlFor="message-data-type">Tipo de Dato</label><select id="message-data-type" value={messageDataType} onChange={handleDataTypeChange} title="Tipo de Dato"><option value="">Seleccionar...</option><option value="void">void (sin dato)</option>{fixedDataTypesList.map((dt) => (<option key={dt} value={dt}>{dt}</option>))}{dataTypes.map((dt) => (<option key={dt} value={dt}>{dt}</option>))}<option value="other">Otro tipo de dato...</option></select></div>
+                                <div className="form-field"><label htmlFor="message-direction">Dirección</label><select id="message-direction" value={messageDirection} onChange={(e: ChangeEvent<HTMLSelectElement>) => setMessageDirection(e.target.value as 'entrada' | 'salida')} title="Dirección del Mensaje"><option value="entrada">Entrada</option><option value="salida">Salida</option></select></div>
+                                <div className="form-field"><label htmlFor="message-type">Tipo</label><select id="message-type" value={messageType} onChange={(e: ChangeEvent<HTMLSelectElement>) => setMessageType(e.target.value as MessageType)} title="Tipo de Mensaje"><option value="invoke">invoke</option><option value="async">async</option><option value="reply" disabled={!invokeMessageExistsInProtocol(messageSignal)}>reply</option></select></div>
                             </div>
-                        )}
+                            {showNewDataTypeInput && (
+                                <div className="add-data-type-container">
+                                    <input type="text" placeholder="Nuevo Tipo de Dato" value={newDataTypeName} onChange={(e) => setNewDataTypeName(e.target.value)} />
+                                    <button type="button" onClick={handleAddNewDataType}>Añadir Tipo</button>
+                                </div>
+                            )}
+                            <div className="message-form-actions">
+                                <button type="button" onClick={handleSaveMessage}>{editingMessageIndex !== null ? 'Guardar Cambios' : 'Añadir Mensaje'}</button>
+                                {editingMessageIndex !== null && <button type="button" className="cancel-edit-button" onClick={resetMessageForm}>Cancelar Edición</button>}
+                            </div>
+                        </div>
                     </div>
                 )}
             </div>
-            {port.type === 'comunicacion' && <button className="save-changes-button" onClick={handleSaveChanges}>Guardar Cambios del Puerto</button>}
+            <div className="panel-footer">
+                <button className="save-changes-button" onClick={handleSaveChanges}>Guardar</button>
+                <button className="cancel-button" onClick={onClose}>Cancelar</button>
+            </div>
         </div>
     );
 };
