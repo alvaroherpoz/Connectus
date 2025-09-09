@@ -17,7 +17,7 @@ import 'reactflow/dist/style.css';
 import { saveAs } from 'file-saver';
 import '../types/App.css';
 
-import type { Node, Edge, Connection, EdgeChange, OnNodesChange, NodeData, PortData, NodeProps, NodeChange, Message } from './types';
+import type { Node, Edge, Connection, EdgeChange, OnNodesChange, NodeData, PortData, NodeProps, NodeChange, Message, ComponentPriority } from './types';
 
 import ComponentNode from './ComponentNode';
 import ContextMenu from './ContextMenu';
@@ -54,6 +54,7 @@ const App: React.FC = () => {
   // Estado principal de nodos, conexiones y utilidades de la interfaz
   const [nodes, setNodes] = useState<Node<NodeData>[]>(initialNodes);
   const [edges, setEdges] = useState<Edge[]>(initialEdges);
+  // Se inicializa el contador de IDs para los nuevos nodos, asegurando que sean números.
   const nodeIdCounter = useRef(4);
   const [menu, setMenu] = useState<{ x: number; y: number; nodeId: string; } | null>(null);
   const [nodeColors, setNodeColors] = useState<Record<string, string>>({
@@ -62,7 +63,7 @@ const App: React.FC = () => {
   });
   const [showToolsMenu, setShowToolsMenu] = useState(false);
   const [downloadFileName, setDownloadFileName] = useState('edroom_diagrama');
-  const [selectedPort, setSelectedPort] = useState<PortData | null>(null);
+  const [selectedPort, setSelectedPort] = useState<{ port: PortData, nodeId: string } | null>(null);
   const [selectedNodeToEdit, setSelectedNodeToEdit] = useState<Node<NodeData> | null>(null);
   const [dataTypes, setDataTypes] = useState<string[]>([]);
   const [notification, setNotification] = useState<Notification | null>(null);
@@ -87,6 +88,7 @@ const App: React.FC = () => {
    * Añade un nuevo componente al diagrama.
    */
   const onAddNode = useCallback(() => {
+    // Genera un ID numérico y lo convierte a string, como requiere ReactFlow.
     const newId = nodeIdCounter.current.toString();
     const existingComponentIds = nodes.map(node => node.data.componentId).sort((a, b) => a - b);
     let newComponentId = 1;
@@ -110,7 +112,7 @@ const App: React.FC = () => {
           node: defaultNodeName,
           componentId: newComponentId,
           maxMessages: 10,
-          priority: 'EDROOMprioNormal',
+          priority: 'EDROOMprioNormal' as ComponentPriority,
           stackSize: 2048,
           isTop: false
       },
@@ -121,6 +123,7 @@ const App: React.FC = () => {
 
     setNodes((nds) => nds.concat(newNode));
     nodeIdCounter.current++;
+    setNotification({ message: `Componente "${newNode.data.name}" añadido con éxito.`, type: 'success' });
   }, [setNodes, nodes]);
 
   /**
@@ -170,20 +173,21 @@ const App: React.FC = () => {
       }
 
       const isNominalToConjugado = sourcePort?.subtype === 'nominal' && targetPort?.subtype === 'conjugado';
-      const areDataTypesMatching = sourcePort?.messages?.[0]?.dataType === targetPort?.messages?.[0]?.dataType;
-      const arePortNamesMatching = sourcePort?.name === targetPort?.name;
+      const areProtocolNamesMatching = sourcePort?.protocolName === targetPort?.protocolName;
 
-      if (!arePortNamesMatching) {
-        setNotification({ message: 'Error: Los puertos solo se pueden conectar si tienen el mismo nombre.', type: 'error' });
+      // Se eliminó la validación areDataTypesMatching para simplificar la lógica de conexión.
+      // La validación de tipos de mensajes ahora se realiza en el PortInfoPanel.
+      
+      if (!areProtocolNamesMatching) {
+        setNotification({ message: 'Error: Los puertos solo se pueden conectar si tienen el mismo nombre de protocolo.', type: 'error' });
         return;
       }
 
-      if (isNominalToConjugado && areDataTypesMatching && arePortNamesMatching) {
+      if (isNominalToConjugado && areProtocolNamesMatching) {
         setEdges((eds) => addEdge(params, eds));
+        setNotification({ message: 'Conexión exitosa.', type: 'success' });
       } else if (!isNominalToConjugado) {
         setNotification({ message: 'Error: Un puerto de comunicación Nominal (salida) solo se puede conectar a un puerto de comunicación Conjugado (entrada).', type: 'error' });
-      } else if (!areDataTypesMatching) {
-        setNotification({ message: `Error de tipo de dato: Los tipos no coinciden. Origen: '${sourcePort?.messages?.[0]?.dataType}', Destino: '${targetPort?.messages?.[0]?.dataType}'.`, type: 'error' });
       }
     }, [setEdges, nodes, setNotification]
   );
@@ -205,34 +209,43 @@ const App: React.FC = () => {
 
   /**
    * Añade un puerto a un nodo específico.
+   * Se ha modificado para devolver un booleano (true=éxito, false=error).
    */
   const handleAddPort = useCallback(
-      (nodeId: string, name: string, type: 'comunicacion' | 'tiempo' | 'interrupcion', subtype: 'nominal' | 'conjugado' | undefined, messages: Message[], interruptHandler?: string) => {
-        setNodes((nds) =>
-            nds.map((node) => {
-              if (node.id === nodeId) {
-                const newPort: PortData = {
-                  id: `${node.id}-${name}`,
-                  name,
-                  type,
-                  subtype,
-                  messages,
-                  interruptHandler,
-                };
-                return {
-                  ...node,
-                  data: {
-                    ...node.data,
-                    ports: [...node.data.ports, newPort],
-                  },
-                };
-              }
-              return node;
-            })
-        );
-        setMenu(null);
-      },
-      [setNodes, setMenu]
+    (nodeId: string, name: string, portId: string, type: 'comunicacion' | 'tiempo' | 'interrupcion', subtype: 'nominal' | 'conjugado' | undefined, protocolName?: string, messages?: Message[], interruptHandler?: string): boolean => {
+      // Validación: El ID del puerto debe ser solo números
+      if (!/^\d+$/.test(portId)) {
+        setNotification({ message: 'Error: El ID del puerto debe contener solo números.', type: 'error' });
+        return false;
+      }
+
+      setNodes((nds) =>
+        nds.map((node) => {
+          if (node.id === nodeId) {
+            const newPort: PortData = {
+              id: portId,
+              name,
+              type,
+              subtype,
+              protocolName,
+              messages,
+              interruptHandler,
+            };
+            return {
+              ...node,
+              data: {
+                ...node.data,
+                ports: [...node.data.ports, newPort],
+              },
+            };
+          }
+          return node;
+        })
+      );
+      setNotification({ message: `Puerto "${name}" añadido con éxito.`, type: 'success' });
+      return true;
+    },
+    [setNodes, setNotification]
   );
 
   /**
@@ -242,7 +255,8 @@ const App: React.FC = () => {
     setNodes((nds) => nds.filter((node) => node.id !== nodeId));
     setEdges((eds) => eds.filter((edge) => edge.source !== nodeId && edge.target !== nodeId));
     setMenu(null);
-  }, [setNodes, setEdges]);
+    setNotification({ message: 'Componente eliminado.', type: 'success' });
+  }, [setNodes, setEdges, setNotification]);
 
   /**
    * Actualiza los atributos de un nodo, validando duplicados.
@@ -335,8 +349,9 @@ const App: React.FC = () => {
 
   /**
    * Añade un puerto conjugado a partir de un puerto nominal.
+   * CORRECCIÓN: Se agregó el parámetro newConjugatePortId.
    */
-  const handleAddConjugatePort = useCallback((nodeId: string, nominalPortId: string) => {
+  const handleAddConjugatePort = useCallback((nodeId: string, nominalPortId: string, newConjugatePortId: string) => {
     let nominalPort: PortData | undefined;
     nodes.forEach(node => {
         const foundPort = node.data.ports.find(p => p.id === nominalPortId);
@@ -350,25 +365,25 @@ const App: React.FC = () => {
       setMenu(null);
       return;
     }
-
-    const conjugatedMessages = nominalPort.messages?.map(msg => ({
-      ...msg,
-      direction: msg.direction === 'entrada' ? 'salida' : 'entrada',
-    }));
-
+    
+    // Se crea el nuevo puerto conjugado con el ID proporcionado por el usuario
     const newPort: PortData = {
-      id: `${nodeId}-${nominalPort.name}`,
+      id: newConjugatePortId, // Usa el ID que viene del menú
       name: nominalPort.name,
       type: 'comunicacion',
       subtype: 'conjugado',
-      messages: conjugatedMessages as Message[],
+      protocolName: nominalPort.protocolName,
+      messages: nominalPort.messages?.map(msg => ({
+        ...msg,
+        direction: msg.direction === 'entrada' ? 'salida' : 'entrada'
+      })),
     };
 
     setNodes(nds => nds.map(node => {
       if (node.id === nodeId) {
         const portExists = node.data.ports.some(p => p.id === newPort.id);
         if (portExists) {
-          setNotification({ message: 'Error: Ya existe un puerto con este nombre en el componente.', type: 'error' });
+          setNotification({ message: 'Error: Ya existe un puerto con este ID en el componente.', type: 'error' });
           return node;
         }
         return {
@@ -381,8 +396,10 @@ const App: React.FC = () => {
       }
       return node;
     }));
+    setNotification({ message: `Puerto conjugado "${nominalPort.name}" añadido con éxito.`, type: 'success' });
     setMenu(null);
   }, [nodes, setNodes, setMenu, setNotification]);
+
 
   /**
    * Elimina un puerto y sus conexiones asociadas.
@@ -405,14 +422,166 @@ const App: React.FC = () => {
       return node;
     }));
     setSelectedPort(null);
-  }, [setNodes, setEdges, edges, setSelectedPort]);
+    setNotification({ message: 'Puerto eliminado.', type: 'success' });
+  }, [setNodes, setEdges, edges, setSelectedPort, setNotification]);
 
   /**
    * Selecciona un puerto para mostrar su información.
    */
-  const handlePortClick = useCallback((portData: PortData) => {
-    setSelectedPort(portData);
-  }, []);
+  const handlePortClick = useCallback((portData: PortData, nodeId: string) => {
+    // Si el panel del mismo puerto ya está abierto, lo cierra.
+    if (selectedPort && selectedPort.port.id === portData.id) {
+        setSelectedPort(null);
+    } else {
+        setSelectedPort({ port: portData, nodeId });
+    }
+  }, [selectedPort]);
+
+  /**
+   * Actualiza la lista de mensajes de un puerto.
+   */
+  const handleUpdatePortMessages = useCallback((nodeId: string, portId: string, newMessages: Message[]) => {
+    setNodes(prevNodes => {
+      const nodeToUpdate = prevNodes.find(n => n.id === nodeId);
+      if (!nodeToUpdate) return prevNodes;
+
+      const currentPort = nodeToUpdate.data.ports.find(p => p.id === portId);
+      if (!currentPort) return prevNodes;
+      
+      const deletedMessages = currentPort.messages?.filter(
+          currentMsg => !newMessages.some(newMsg => newMsg.signal === currentMsg.signal)
+      );
+
+      if (deletedMessages && deletedMessages.length > 0) {
+          const deletedInvokes = deletedMessages.filter(msg => msg.type === 'invoke');
+
+          if (deletedInvokes.length > 0) {
+            const deletedInvokeSignal = deletedInvokes[0].signal;
+
+            const relatedPort = prevNodes
+                .flatMap(n => n.data.ports)
+                .find(p => p.id !== currentPort.id && p.protocolName === currentPort.protocolName);
+
+            if (relatedPort) {
+                const updatedRelatedMessages = relatedPort.messages?.filter(
+                    msg => !(msg.type === 'reply' && msg.signal === deletedInvokeSignal)
+                ) || [];
+
+                const updatedNodesWithRelatedPort = prevNodes.map(n => {
+                    if (n.id === relatedPort.id.split('-')[0]) {
+                        return {
+                            ...n,
+                            data: {
+                                ...n.data,
+                                ports: n.data.ports.map(p => 
+                                    p.id === relatedPort.id ? { ...p, messages: updatedRelatedMessages } : p
+                                )
+                            }
+                        };
+                    }
+                    return n;
+                });
+                
+                return updatedNodesWithRelatedPort.map(n => {
+                    if (n.id === nodeId) {
+                        return {
+                            ...n,
+                            data: {
+                                ...n.data,
+                                ports: n.data.ports.map(p => 
+                                    p.id === portId ? { ...p, messages: newMessages } : p
+                                )
+                            }
+                        };
+                    }
+                    return n;
+                });
+            }
+          }
+      }
+      
+      return prevNodes.map(n => {
+          if (n.id === nodeId) {
+              return {
+                  ...n,
+                  data: {
+                      ...n.data,
+                      ports: n.data.ports.map(p =>
+                          p.id === portId ? { ...p, messages: newMessages } : p
+                      ),
+                  },
+              };
+          }
+          return n;
+      });
+    });
+    setNotification({ message: 'Mensajes del puerto actualizados con éxito.', type: 'success' });
+    setSelectedPort(null);
+  }, [setNodes, setNotification]);
+  
+  /**
+   * Actualiza el ID y el nombre de un puerto.
+   */
+  const handleUpdatePortId = useCallback((nodeId: string, oldPortId: string, newPortId: string, newPortName: string) => {
+    // Validación: El ID del puerto debe ser solo números
+    if (!/^\d+$/.test(newPortId)) {
+      setNotification({ message: 'Error: El ID del puerto debe contener solo números.', type: 'error' });
+      return;
+    }
+    
+    // Validar si el nuevo ID ya existe en el mismo nodo
+    const isDuplicateId = nodes.some(node =>
+        node.id === nodeId && node.data.ports.some(p => p.id === newPortId && p.id !== oldPortId)
+    );
+    if (isDuplicateId) {
+        setNotification({ message: `Error: Ya existe un puerto con el ID "${newPortId}" en este componente.`, type: 'error' });
+        return;
+    }
+
+    // Validar si el nuevo nombre ya existe en el mismo nodo
+    const isDuplicateName = nodes.some(node =>
+        node.id === nodeId && node.data.ports.some(p => p.name === newPortName && p.id !== oldPortId)
+    );
+    if (isDuplicateName) {
+        setNotification({ message: `Error: Ya existe un puerto con el nombre "${newPortName}" en este componente.`, type: 'error' });
+        return;
+    }
+
+    // Actualizar los nodos
+    setNodes(prevNodes => prevNodes.map(node => {
+        if (node.id === nodeId) {
+            const updatedPorts = node.data.ports.map(p => {
+                if (p.id === oldPortId) {
+                    return { ...p, id: newPortId, name: newPortName };
+                }
+                return p;
+            });
+            return {
+                ...node,
+                data: {
+                    ...node.data,
+                    ports: updatedPorts
+                }
+            };
+        }
+        return node;
+    }));
+
+    // Actualizar las conexiones si el ID del puerto ha cambiado
+    setEdges(prevEdges => prevEdges.map(edge => {
+        if (edge.sourceHandle === oldPortId) {
+            return { ...edge, sourceHandle: newPortId };
+        }
+        if (edge.targetHandle === oldPortId) {
+            return { ...edge, targetHandle: newPortId };
+        }
+        return edge;
+    }));
+
+    setNotification({ message: `Puerto "${oldPortId}" actualizado a "${newPortId}" con éxito.`, type: 'success' });
+    
+  }, [setNodes, setEdges, nodes, setNotification]);
+
 
   /**
    * Define los tipos de nodos para ReactFlow.
@@ -584,7 +753,9 @@ const App: React.FC = () => {
         <ContextMenu
           x={menu.x}
           y={menu.y}
-          onAddPort={(...args) => handleAddPort(menu.nodeId, ...args)}
+          // Pasa la función de añadir puerto que ahora devuelve un booleano
+          onAddPort={handleAddPort}
+          // Pasa la función para añadir puerto conjugado
           onAddConjugatePort={handleAddConjugatePort}
           onClose={() => setMenu(null)}
           onDeleteNode={handleDeleteNode}
@@ -599,12 +770,20 @@ const App: React.FC = () => {
           nodeId={menu.nodeId}
           handleAddDataType={handleAddDataType}
           dataTypes={dataTypes}
+          setNotification={setNotification}
         />
       )}
       {selectedPort && (
         <PortInfoPanel
-          port={selectedPort}
+          port={selectedPort.port}
+          nodeId={selectedPort.nodeId}
           onClose={() => setSelectedPort(null)}
+          onUpdatePortMessages={handleUpdatePortMessages}
+          onUpdatePortId={handleUpdatePortId} // Se agregó la nueva prop
+          dataTypes={dataTypes}
+          setNotification={setNotification}
+          handleAddDataType={handleAddDataType}
+          nodes={nodes}
         />
       )}
       {selectedNodeToEdit && (

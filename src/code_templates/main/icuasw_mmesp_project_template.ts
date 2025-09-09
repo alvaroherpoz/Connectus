@@ -58,10 +58,10 @@ export class icuasw_mmesp_project_template {
                 finalInstanceName = componentNameBase;
                 componentClass = componentType.replace(/\s/g, '');
             } else if (!c.data.isTop && isRemote) {
-                finalInstanceName = `rcc${componentNameBase}`;
+                finalInstanceName = `r${componentNameBase}`;
                 componentClass = `RCC${componentType.replace(/\s/g, '')}`;
             } else { // !c.data.isTop && !isRemote
-                finalInstanceName = `cc${componentNameBase}`;
+                finalInstanceName = `${componentNameBase}`;
                 componentClass = `CC${componentType.replace(/\s/g, '')}`;
             }
             

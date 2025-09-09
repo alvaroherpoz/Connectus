@@ -1,8 +1,3 @@
-/**
- * types.ts
- * Define los tipos y estructuras de datos utilizados en la aplicación Connectus.
- */
-
 import type {
   Node as RFNode,
   Edge as RFEdge,
@@ -28,12 +23,18 @@ export type ComponentPriority =
   | 'EDROOMprioMINIMUM';
 
 /**
+ * Define el tipo de mensaje de comunicación.
+ */
+export type MessageType = 'invoke' | 'async' | 'reply';
+
+/**
  * Representa un mensaje asociado a un puerto de comunicación.
  */
 export interface Message {
   signal: string;
   dataType: string;
   direction: 'entrada' | 'salida';
+  type: MessageType;
 }
 
 /**
@@ -44,6 +45,7 @@ export interface PortData {
   name: string;
   type: 'comunicacion' | 'tiempo' | 'interrupcion';
   subtype?: 'nominal' | 'conjugado';
+  protocolName?: string; // Nuevo: Nombre del protocolo
   messages?: Message[];
   interruptHandler?: string;
 }
@@ -60,6 +62,8 @@ export interface NodeData {
   priority: ComponentPriority;
   stackSize: number;
   isTop?: boolean;
+  onPortClick?: (port: PortData, nodeId: string) => void;
+  onDeletePort?: (nodeId: string, portId: string) => void;
 }
 
 /**
