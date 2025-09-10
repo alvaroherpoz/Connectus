@@ -20,62 +20,26 @@ export class icuasw_mmesp_project_template {
         // Generar inclusiones de cabeceras
         const includes = nodes.map(c => {
             const name = c.data.name.replace(/\s/g, '').toLowerCase();
-            let prefix = '';
-
-            // Lógica para el componente Top: si es remoto, 'r'. Si no, nada.
-            if (c.data.isTop && c.data.node !== localNodeName) {
-                prefix = 'r';
-            } else if (!c.data.isTop && c.data.node === localNodeName) {
-                // Componentes locales normales llevan 'cc'.
-                prefix = 'cc';
-            } else if (!c.data.isTop && c.data.node !== localNodeName) {
-                // Componentes remotos normales llevan 'rcc'.
-                prefix = 'rcc';
-            }
-            
+            const prefix = this.getIncludePrefix(c, localNodeName);
             return `#include <public/${prefix}${name}_iface_v1.h>`;
         }).join('\n');
 
         // Generar las instancias de los componentes
         const initComponents = nodes.map(c => {
-            const componentType = c.data.name;
             const id = c.data.componentId;
             const maxMessages = c.data.maxMessages;
             const priority = c.data.priority;
             const stackSize = c.data.stackSize;
-            
-            const isRemote = c.data.node !== localNodeName;
-            const componentNameBase = c.data.name.toLowerCase().replace(/\s/g, '');
-
-            let finalInstanceName = '';
-            let componentClass = '';
-            
-            // Lógica para la instancia y la clase del componente
-            if (c.data.isTop && isRemote) {
-                finalInstanceName = `r${componentNameBase}`;
-                componentClass = `R${componentType.replace(/\s/g, '')}`;
-            } else if (c.data.isTop && !isRemote) {
-                finalInstanceName = componentNameBase;
-                componentClass = componentType.replace(/\s/g, '');
-            } else if (!c.data.isTop && isRemote) {
-                finalInstanceName = `r${componentNameBase}`;
-                componentClass = `RCC${componentType.replace(/\s/g, '')}`;
-            } else { // !c.data.isTop && !isRemote
-                finalInstanceName = `${componentNameBase}`;
-                componentClass = `CC${componentType.replace(/\s/g, '')}`;
-            }
-            
-            const memoryName = `${isRemote ? 'r' : ''}${c.data.name.toLowerCase().replace(/\s/g, '')}`;
+            const componentClass = this.getComponentClass(c, localNodeName);
+            const finalInstanceName = this.getInstanceName(c, localNodeName);
+            const memoryName = this.getInstanceName(c, localNodeName);
 
             return `\t${componentClass}  ${finalInstanceName}(${id}, ${maxMessages}, ${priority}, ${stackSize}, systemDeployment.Get${memoryName}Memory());`;
         }).join('\n');
         
         // Generar la lista de componentes para la configuración
         const configComponents = nodes.map(c => {
-            let instanceName = c.data.name.toLowerCase().replace(/\s/g, '');
-            if (c.data.node !== localNodeName) {
-                instanceName = `r${instanceName}`;
-            }
+            const instanceName = this.getInstanceName(c, localNodeName);
             return `&${instanceName}`;
         }).join(', ');
 
@@ -120,5 +84,64 @@ ${initComponents}
     //;
 
 }`;
+    }
+
+    // --- Funciones auxiliares para la lógica de la plantilla ---
+
+    /**
+     * Obtiene el nombre de instancia para un nodo dado.
+     * @param node - Nodo del diagrama.
+     * @param localNodeName - Nombre del nodo local.
+     * @returns Nombre de instancia.
+     */
+    private static getInstanceName(node: Node<NodeData>, localNodeName: string): string {
+        const isRemote = node.data.node !== localNodeName;
+        const componentNameBase = node.data.name.toLowerCase().replace(/\s/g, '');
+        
+        if (isRemote) {
+            return `r${componentNameBase}`;
+        }
+        return componentNameBase;
+    }
+
+    /**
+     * Obtiene la clase de componente para un nodo.
+     * @param node - Nodo del diagrama.
+     * @param localNodeName - Nombre del nodo local.
+     * @returns Nombre de la clase de componente.
+     */
+    private static getComponentClass(node: Node<NodeData>, localNodeName: string): string {
+        const isRemote = node.data.node !== localNodeName;
+        const componentType = node.data.name.replace(/\s/g, '');
+
+        if (node.data.isTop && isRemote) {
+            return `R${componentType}`;
+        } else if (node.data.isTop && !isRemote) {
+            return componentType;
+        } else if (!node.data.isTop && isRemote) {
+            return `RCC${componentType}`;
+        } else { // !node.data.isTop && !isRemote
+            return `CC${componentType}`;
+        }
+    }
+
+    /**
+     * Obtiene el prefijo de inclusión para un nodo.
+     * @param node - Nodo del diagrama.
+     * @param localNodeName - Nombre del nodo local.
+     * @returns Prefijo para el include.
+     */
+    private static getIncludePrefix(node: Node<NodeData>, localNodeName: string): string {
+        const isRemote = node.data.node !== localNodeName;
+        
+        if (node.data.isTop && isRemote) {
+            return 'r';
+        } else if (node.data.isTop && !isRemote) {
+            return '';
+        } else if (!node.data.isTop && isRemote) {
+            return 'rcc';
+        } else { // !node.data.isTop && !isRemote
+            return 'cc';
+        }
     }
 }

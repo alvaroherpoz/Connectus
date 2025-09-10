@@ -81,20 +81,36 @@ const PortInfoPanel: React.FC<PortInfoPanelProps> = ({
     /**
      * Valida si un mensaje 'invoke' con la misma señal existe en el protocolo.
      * Itera sobre todos los puertos en todos los nodos.
+     * CORRECCIÓN: Devuelve el mensaje 'invoke' si lo encuentra, para poder validar la dirección.
      */
-    const invokeMessageExistsInProtocol = useCallback((signal: string) => {
-        // Itera sobre todos los nodos y puertos para encontrar un 'invoke' en el mismo protocolo
+    const findInvokeMessageInProtocol = useCallback((signal: string): Message | undefined => {
+        // 1. Revisa primero los mensajes que se están editando en el panel local,
+        // ya que son los más actualizados para este puerto.
+        const invokeInPanel = messages.find(msg => msg.type === 'invoke' && msg.signal === signal);
+        if (invokeInPanel) {
+            return invokeInPanel;
+        }
+
+        // 2. Si no se encuentra, itera sobre todos los demás nodos y puertos del estado global
+        // para encontrar un 'invoke' en el mismo protocolo.
         for (const node of nodes) {
             for (const p of node.data.ports) {
+                // No se vuelve a comprobar el puerto actual, ya que sus mensajes ya se han
+                // verificado a través del estado local `messages`. El estado global `p.messages` estaría obsoleto.
+                if (node.id === nodeId && p.id === port.id) {
+                    continue;
+                }
+
                 if (p.protocolName === port.protocolName && p.messages) {
-                    if (p.messages.some(msg => msg.type === 'invoke' && msg.signal === signal)) {
-                        return true;
+                    const invokeMsg = p.messages.find(msg => msg.type === 'invoke' && msg.signal === signal);
+                    if (invokeMsg) {
+                        return invokeMsg;
                     }
                 }
             }
         }
-        return false;
-    }, [nodes, port.protocolName]);
+        return undefined;
+    }, [nodes, port.protocolName, messages, nodeId, port.id]);
     
     /**
      * Añade un nuevo mensaje o actualiza uno existente.
@@ -140,10 +156,18 @@ const PortInfoPanel: React.FC<PortInfoPanelProps> = ({
  
          // If the message is a 'reply', ensure a corresponding 'invoke' exists.
          if (messageType === 'reply') {
-             if (!invokeMessageExistsInProtocol(messageSignal)) {
+            const invokeMessage = findInvokeMessageInProtocol(messageSignal);
+
+             if (!invokeMessage) {
                  setNotification({ message: 'Un mensaje de tipo "reply" requiere un mensaje "invoke" con la misma señal en el mismo protocolo.', type: 'error' });
                  return;
              }
+
+            // Validate direction: must be opposite to the invoke message
+            if (invokeMessage.direction === messageDirection) {
+                setNotification({ message: `Error: La dirección del "reply" (${messageDirection}) debe ser opuesta a la del "invoke" (${invokeMessage.direction}).`, type: 'error' });
+                return;
+            }
          }
  
          const newMessage: Message = { signal: messageSignal, dataType: messageDataType, direction: messageDirection, type: messageType };
@@ -158,7 +182,7 @@ const PortInfoPanel: React.FC<PortInfoPanelProps> = ({
          
          resetMessageForm();
          setNotification({ message: 'Mensaje guardado con éxito.', type: 'success' });
-     }, [messageSignal, messageDataType, messageDirection, messageType, messages, editingMessageIndex, setNotification, invokeMessageExistsInProtocol, nodes, port.protocolName, nodeId, port.id]);
+     }, [messageSignal, messageDataType, messageDirection, messageType, messages, editingMessageIndex, setNotification, findInvokeMessageInProtocol, nodes, port.protocolName, nodeId, port.id]);
 
     /**
      * Rellena el formulario con los datos de un mensaje para editarlo.
@@ -335,7 +359,7 @@ const PortInfoPanel: React.FC<PortInfoPanelProps> = ({
                                 <div className="form-field"><label htmlFor="message-signal">Señal</label><input id="message-signal" type="text" placeholder="Ej: S_Data" value={messageSignal} onChange={(e: ChangeEvent<HTMLInputElement>) => setMessageSignal(e.target.value)} /></div>
                                 <div className="form-field"><label htmlFor="message-data-type">Tipo de Dato</label><select id="message-data-type" value={messageDataType} onChange={handleDataTypeChange} title="Tipo de Dato"><option value="">Seleccionar...</option><option value="void">void (sin dato)</option>{fixedDataTypesList.map((dt) => (<option key={dt} value={dt}>{dt}</option>))}{dataTypes.map((dt) => (<option key={dt} value={dt}>{dt}</option>))}<option value="other">Otro tipo de dato...</option></select></div>
                                 <div className="form-field"><label htmlFor="message-direction">Dirección</label><select id="message-direction" value={messageDirection} onChange={(e: ChangeEvent<HTMLSelectElement>) => setMessageDirection(e.target.value as 'entrada' | 'salida')} title="Dirección del Mensaje"><option value="entrada">Entrada</option><option value="salida">Salida</option></select></div>
-                                <div className="form-field"><label htmlFor="message-type">Tipo</label><select id="message-type" value={messageType} onChange={(e: ChangeEvent<HTMLSelectElement>) => setMessageType(e.target.value as MessageType)} title="Tipo de Mensaje"><option value="invoke">invoke</option><option value="async">async</option><option value="reply" disabled={!invokeMessageExistsInProtocol(messageSignal)}>reply</option></select></div>
+                                <div className="form-field"><label htmlFor="message-type">Tipo</label><select id="message-type" value={messageType} onChange={(e: ChangeEvent<HTMLSelectElement>) => setMessageType(e.target.value as MessageType)} title="Tipo de Mensaje"><option value="invoke">invoke</option><option value="async">async</option><option value="reply" disabled={!findInvokeMessageInProtocol(messageSignal)}>reply</option></select></div>
                             </div>
                             {showNewDataTypeInput && (
                                 <div className="add-data-type-container">

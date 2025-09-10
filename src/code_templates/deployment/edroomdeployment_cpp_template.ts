@@ -38,7 +38,7 @@ export class edroomdeployment_cpp_template {
         const setMemoryContent = allNodes.map(c => {
             const instanceName = this.getInstanceName(c, localNodeName);
             const maxMessages = c.data.maxMessages;
-            const maxQueueNodes = c.data.maxMessages;
+            const maxQueueNodes = this.calculateMaxQueueNodes(c);
 
             return `\
     ${instanceName}Memory.SetMemory(${maxMessages}, ${instanceName}Messages, &${instanceName}MessagesMarks[0]
@@ -70,7 +70,7 @@ export class edroomdeployment_cpp_template {
                 const remoteNode = sourceNode.data.node !== localNodeName ? sourceNode : targetNode;
 
                 const remoteInterfaceId = this.getInterfaceIdFromEdge(remoteNode, conn);
-                const remoteInterfaceName = this.getPortsFromEdge(conn, remoteNode === sourceNode ? 'source' : 'target');
+                const remoteInterfaceName = this.getPortNameFromEdge(nodes, conn, remoteNode === sourceNode ? 'source' : 'target');
 
                 return `
                         case(${remoteInterfaceId}): // Port: ${remoteInterfaceName}
@@ -107,16 +107,16 @@ ${interfaceCases}
             const targetNode = nodes.find(n => n.id === conn.target)!;
             const sourceName = sourceNode.data.name.replace(/\s/g, '');
             const targetName = targetNode.data.name.replace(/\s/g, '');
-            const sourcePortName = this.getPortsFromEdge(conn, 'source');
-            const targetPortName = this.getPortsFromEdge(conn, 'target');
+            const sourcePortName = this.getPortNameFromEdge(nodes, conn, 'source');
+            const targetPortName = this.getPortNameFromEdge(nodes, conn, 'target');
             
             const port_source_name = sourcePortName;
             const port_target_name = targetPortName;
 
 
             // getComponentSignals 
-            const sourcePortData = sourceNode.data.ports.filter(p => p.name.replace(/\s/g, '') === sourcePortName);
-            const targetPortData = targetNode.data.ports.filter(p => p.name.replace(/\s/g, '') === targetPortName);
+            const sourcePortData = sourceNode.data.ports.filter(p => p.name.replace(/\s/g, '') === port_source_name);
+            const targetPortData = targetNode.data.ports.filter(p => p.name.replace(/\s/g, '') === port_target_name);
 
             const sourceSignals = this.getComponentSignals(sourcePortData);
             const targetSignals = this.getComponentSignals(targetPortData);
@@ -169,13 +169,13 @@ TEDROOMSignal CEDROOMSystemCommSAP::C${targetNode.data.componentId}${targetName}
             return sourceNode && targetNode && sourceNode.data.node === localNodeName && targetNode.data.node === localNodeName;
         });
 
-        const setLocalConnectionsContent = localConnections.map((conn, index) => {
+        const setLocalConnectionsContent = localConnections.filter(conn => conn.sourceHandle && conn.targetHandle).map((conn, index) => {
             const sourceNode = nodes.find(n => n.id === conn.source)!;
             const targetNode = nodes.find(n => n.id === conn.target)!;
             const sourceInstance = this.getInstanceName(sourceNode, localNodeName);
             const targetInstance = this.getInstanceName(targetNode, localNodeName);
-            const sourcePort = this.getPortsFromEdge(conn, 'source');
-            const targetPort = this.getPortsFromEdge(conn, 'target');
+            const sourcePort = this.getPortNameFromEdge(nodes, conn, 'source');
+            const targetPort = this.getPortNameFromEdge(nodes, conn, 'target');
 
             const sourceName = sourceNode.data.name.replace(/\s/g, '');
             const targetName = targetNode.data.name.replace(/\s/g, '');
@@ -197,7 +197,7 @@ TEDROOMSignal CEDROOMSystemCommSAP::C${targetNode.data.componentId}${targetName}
             return sourceNode && targetNode && sourceNode.data.node !== targetNode.data.node && !sourceNode.data.isTop && !targetNode.data.isTop;
         });
 
-        const setRemoteConnectionsContent = remoteConnections.map((conn, index) => {
+        const setRemoteConnectionsContent = remoteConnections.filter(conn => conn.sourceHandle && conn.targetHandle).map((conn, index) => {
             const sourceNode = nodes.find(n => n.id === conn.source)!;
             const targetNode = nodes.find(n => n.id === conn.target)!;
 
@@ -205,10 +205,9 @@ TEDROOMSignal CEDROOMSystemCommSAP::C${targetNode.data.componentId}${targetName}
             const remoteComponent = sourceNode.data.node !== localNodeName ? sourceNode : targetNode;
 
             const localInstance = this.getInstanceName(localComponent, localNodeName);
-            const remoteInstance = this.getInstanceName(remoteComponent, localNodeName);
 
-            const localInterfaceName = this.getPortsFromEdge(conn, localComponent === sourceNode ? 'source' : 'target');
-            const remoteInterfaceName = this.getPortsFromEdge(conn, remoteComponent === sourceNode ? 'source' : 'target');
+            const localInterfaceName = this.getPortNameFromEdge(nodes, conn, localComponent === sourceNode ? 'source' : 'target');
+            const remoteInterfaceName = this.getPortNameFromEdge(nodes, conn, remoteComponent === sourceNode ? 'source' : 'target');
 
             const localName = localComponent.data.name.replace(/\s/g, '');
             const remoteName = remoteComponent.data.name.replace(/\s/g, '');
@@ -218,7 +217,7 @@ TEDROOMSignal CEDROOMSystemCommSAP::C${targetNode.data.componentId}${targetName}
             
             
             return `\
-             m_remoteCommSAP.Connect(mp_${localInstance}->${localInterfaceName}, mp_${remoteInstance}->${remoteInterfaceName}, remote_connections[${index}],
+             m_remoteCommSAP.Connect(mp_${localInstance}->${localInterfaceName}, mp_${this.getInstanceName(remoteComponent, localNodeName)}->${remoteInterfaceName}, remote_connections[${index}],
                                              C${localComponent.data.componentId}${localName}_P${local_interface_name}__C${remoteComponent.data.componentId}${remoteName}_P${remote_interface_name},
                                              C${remoteComponent.data.componentId}${remoteName}_P${remote_interface_name}__C${localComponent.data.componentId}${localName}_P${local_interface_name});`;
 
@@ -368,7 +367,7 @@ ${signalTranslations}
 
 void CEDROOMSystemCommSAP::RegisterInterfaces(){
 
-${this.generateRegisterInterfaces(allNodes)}
+${this.generateRegisterInterfaces(allNodes, localNodeName)}
 }
 
 
@@ -545,21 +544,60 @@ Pr_TaskRV_t CEDROOMSystemDeployment::main_task(Pr_TaskP_t){
 
     // --- Funciones auxiliares para la lógica de la plantilla ---
     /**
+     * Calcula el número máximo de nodos de cola para un componente.
+     * @param node - El nodo del componente.
+     * @returns El número de nodos de cola.
+     */
+    private static calculateMaxQueueNodes(node: Node<NodeData>): number {
+        let asyncMessagesCount = 0;
+        let invokePortsCount = 0;
+        let timerPortsCount = 0;
+
+        node.data.ports.forEach(port => {
+            if (port.type === 'tiempo') {
+                timerPortsCount++;
+            }
+
+            if (port.type === 'comunicacion' && port.messages) {
+                let hasEffectiveInvokeEntrada = false;
+                port.messages.forEach(message => {
+                    if (message.type === 'async') {
+                        asyncMessagesCount++;
+                    }
+                    if (message.type === 'invoke') {
+                        const isEntrada = message.direction === 'entrada';
+                        const isConjugado = port.subtype === 'conjugado';
+                        // La dirección efectiva de entrada es:
+                        // - 'entrada' en un puerto nominal
+                        // - 'salida' en un puerto conjugado (porque es la perspectiva del componente)
+                        if ((isEntrada && !isConjugado) || (!isEntrada && isConjugado)) {
+                            hasEffectiveInvokeEntrada = true;
+                        }
+                    }
+                });
+                if (hasEffectiveInvokeEntrada) {
+                    invokePortsCount++;
+                }
+            }
+        });
+        // El cálculo es: num_mensajes_async + num_puertos_con_invoke_entrada + num_puertos_tiempo
+        return asyncMessagesCount + invokePortsCount + timerPortsCount;
+    }
+
+    /**
      * Obtiene el nombre de instancia para un nodo dado.
      * @param node - Nodo del diagrama.
      * @param localNodeName - Nombre del nodo local.
      * @returns Nombre de instancia.
      */
     private static getInstanceName(node: Node<NodeData>, localNodeName: string): string {
-        const componentNameBase = node.data.name.replace(/\s/g, '').toLowerCase();
-
-        if (node.data.node === localNodeName) {
-            // Local node
-            return componentNameBase;
-        } else {
-            // Remote node
+        const isRemote = node.data.node !== localNodeName;
+        const componentNameBase = node.data.name.toLowerCase().replace(/\s/g, '');
+        
+        if (isRemote) {
             return `r${componentNameBase}`;
         }
+        return componentNameBase;
     }
 
     /**
@@ -569,38 +607,37 @@ Pr_TaskRV_t CEDROOMSystemDeployment::main_task(Pr_TaskP_t){
      * @returns Nombre de la clase de componente.
      */
     private static getComponentClass(node: Node<NodeData>, localNodeName: string): string {
+        const isRemote = node.data.node !== localNodeName;
         const componentType = node.data.name.replace(/\s/g, '');
 
-        if (node.data.node === localNodeName) {
-            // Local node
-            if (node.data.isTop) {
-                return componentType;
-            } else {
-                return `CC${componentType}`;
-            }
-        } else {
-            // Remote node
-            if (node.data.isTop) {
-                return `R${componentType}`;
-            } else {
-                return `RCC${componentType}`;
-            }
+        if (node.data.isTop && isRemote) {
+            return `R${componentType}`;
+        } else if (node.data.isTop && !isRemote) {
+            return componentType;
+        } else if (!node.data.isTop && isRemote) {
+            return `RCC${componentType}`;
+        } else { // !node.data.isTop && !isRemote
+            return `CC${componentType}`;
         }
     }
 
     /**
-     * Obtiene el identificador de puerto desde un edge.
+     * Obtiene el nombre del puerto desde un edge.
      * @param edge - Conexión entre nodos.
      * @param type - Tipo de puerto ('source' o 'target').
-     * @returns Identificador del puerto.
+     * @returns Nombre del puerto.
      */
-    private static getPortsFromEdge(edge: Edge, type: 'source' | 'target'): string {
-        const portHandle = type === 'source' ? edge.sourceHandle : edge.targetHandle;
-        if (portHandle) {
-            const parts = portHandle.split('-');
-            return parts[1] || '';
+    private static getPortNameFromEdge(nodes: Node<NodeData>[], edge: Edge, type: 'source' | 'target'): string {
+        const nodeId = type === 'source' ? edge.source : edge.target;
+        const portId = type === 'source' ? edge.sourceHandle : edge.targetHandle;
+
+        if (!nodeId || !portId) {
+            return '';
         }
-        return '';
+        const node = nodes.find(n => n.id === nodeId);
+        const port = node?.data.ports.find(p => p.id === portId);
+        
+        return port ? port.name.replace(/\s/g, '') : '';
     }
 
     /**
@@ -611,9 +648,7 @@ Pr_TaskRV_t CEDROOMSystemDeployment::main_task(Pr_TaskP_t){
      */
     private static getInterfaceIdFromEdge(node: Node<NodeData>, edge: Edge): string | number {
         const handle = node.id === edge.source ? edge.sourceHandle : edge.targetHandle;
-        const portName = handle?.split('-')[1];
-        const interfaceObj = node.data.ports.find(port => port.name.toLowerCase().replace(/\s/g, '') === portName?.toLowerCase());
-        return interfaceObj?.id || -1;
+        return handle || -1;
     }
 
     /**
@@ -626,9 +661,17 @@ Pr_TaskRV_t CEDROOMSystemDeployment::main_task(Pr_TaskP_t){
         ports.forEach(port => {
             if (port.messages) {
                 port.messages.forEach(message => {
+                    let directionType: 'IN' | 'OUT';
+                    if (port.subtype === 'conjugado') {
+                        // Para puertos conjugados, la dirección se invierte
+                        directionType = message.direction === 'entrada' ? 'OUT' : 'IN';
+                    } else {
+                        // Para puertos nominales (o sin subtipo), la dirección es directa
+                        directionType = message.direction === 'entrada' ? 'IN' : 'OUT';
+                    }
                     signals.push({
                         name: message.signal,
-                        type: message.direction === 'entrada' ? 'IN' : 'OUT',
+                        type: directionType,
                         portName: port.name.replace(/\s/g, ''),
                         dataType: message.dataType
                     });
@@ -696,33 +739,25 @@ Pr_TaskRV_t CEDROOMSystemDeployment::main_task(Pr_TaskP_t){
      * @param nodes - Lista de nodos del diagrama.
      * @returns Código fuente para el registro de interfaces.
      */
-    private static generateRegisterInterfaces(nodes: Node<NodeData>[]): string {
+    private static generateRegisterInterfaces(nodes: Node<NodeData>[], localNodeName: string): string {
         let content = '';
 
         nodes.forEach(c => {
-            let interfaceIdCounter = 0; // Reinicia el contador para cada componente
-            const instanceName = this.getInstanceName(c, c.data.node!);
+            const instanceName = this.getInstanceName(c, localNodeName);
             const componentPorts = c.data.ports;
+            const isRemote = c.data.node !== localNodeName;
 
-            content += `      // Register Interfaces for Component ${c.data.componentId}//${c.data.name.replace(/\s/g, '')}\n`;
+            content += `	// Register Interfaces for Component ${c.data.componentId}//${c.data.name.replace(/\s/g, '')}\n`;
 
             componentPorts.forEach(port => {
-                let registrationLine = '';
-                
-                // Lógica para puertos de comunicación
-                if (port.type === 'comunicacion') {
-                    interfaceIdCounter++;
-                    registrationLine = `m_localCommSAP.RegisterInterface(${interfaceIdCounter}, mp_${instanceName}->${port.name.replace(/\s/g, '')}, mp_${instanceName});`;
-                } 
-                // Lógica para puertos de tiempo e interrupción
-                else if (port.type === 'tiempo' || port.type === 'interrupcion') {
-                    // Estos puertos no se conectan a otros componentes, se registran como puertos de tarea
-                    interfaceIdCounter++;
-                    registrationLine = `m_localCommSAP.RegisterInterface(${interfaceIdCounter}, mp_${instanceName}->${port.name.replace(/\s/g, '')}, EDROOM::EDROOM_TASK_PORT);`;
-                }
-                
-                if (registrationLine) {
-                    content += `      ${registrationLine}\n`;
+                // Restricción: No generar puertos de tiempo o interrupción para componentes remotos.
+                if (isRemote && (port.type === 'tiempo' || port.type === 'interrupcion')) {
+                    // No hacer nada para estos puertos.
+                } else {
+                    const portName = port.name.replace(/\s/g, '');
+                    const portId = port.id;
+                    const registrationLine = `	m_localCommSAP.RegisterInterface(${portId}, mp_${instanceName}->${portName}, mp_${instanceName});`;
+                    content += `${registrationLine}\n`;
                 }
             });
             content += `\n`;

@@ -149,12 +149,6 @@ const App: React.FC = () => {
    */
   const onConnect = useCallback(
     (params: Connection) => {
-      setEdges((eds) =>
-        eds.filter(
-          (edge) => !(edge.sourceHandle === params.sourceHandle || edge.targetHandle === params.targetHandle)
-        )
-      );
-
       const sourceNode = nodes.find(n => n.id === params.source);
       const targetNode = nodes.find(n => n.id === params.target);
 
@@ -349,16 +343,17 @@ const App: React.FC = () => {
 
   /**
    * Añade un puerto conjugado a partir de un puerto nominal.
-   * CORRECCIÓN: Se agregó el parámetro newConjugatePortId.
+   * CORRECCIÓN: Se usa un ID compuesto para el puerto nominal para evitar ambigüedades.
    */
-  const handleAddConjugatePort = useCallback((nodeId: string, nominalPortId: string, newConjugatePortId: string) => {
-    let nominalPort: PortData | undefined;
-    nodes.forEach(node => {
-        const foundPort = node.data.ports.find(p => p.id === nominalPortId);
-        if (foundPort && foundPort.type === 'comunicacion' && foundPort.subtype === 'nominal') {
-            nominalPort = foundPort;
-        }
-    });
+  const handleAddConjugatePort = useCallback((targetNodeId: string, compositeNominalPortId: string, newConjugatePortId: string, newConjugatePortName: string) => {
+    const [sourceNodeId, sourcePortId] = compositeNominalPortId.split(':');
+
+    const sourceNode = nodes.find(n => n.id === sourceNodeId);
+    const nominalPort = sourceNode?.data.ports.find((p: PortData) => 
+        p.id === sourcePortId && 
+        p.type === 'comunicacion' && 
+        p.subtype === 'nominal'
+    );
 
     if (!nominalPort) {
       setNotification({ message: 'Error: No se encontró el puerto nominal de origen.', type: 'error' });
@@ -366,24 +361,22 @@ const App: React.FC = () => {
       return;
     }
     
-    // Se crea el nuevo puerto conjugado con el ID proporcionado por el usuario
+    // Se crea el nuevo puerto conjugado con el ID y nombre proporcionados por el usuario
     const newPort: PortData = {
-      id: newConjugatePortId, // Usa el ID que viene del menú
-      name: nominalPort.name,
+      id: newConjugatePortId,
+      name: newConjugatePortName,
       type: 'comunicacion',
       subtype: 'conjugado',
       protocolName: nominalPort.protocolName,
-      messages: nominalPort.messages?.map(msg => ({
-        ...msg,
-        direction: msg.direction === 'entrada' ? 'salida' : 'entrada'
-      })),
+      messages: nominalPort.messages?.map(msg => ({ ...msg })), // Las direcciones ya no se invierten
     };
 
     setNodes(nds => nds.map(node => {
-      if (node.id === nodeId) {
+      if (node.id === targetNodeId) {
+        // La validación principal se hace en ContextMenu, pero esto sirve como salvaguarda.
         const portExists = node.data.ports.some(p => p.id === newPort.id);
         if (portExists) {
-          setNotification({ message: 'Error: Ya existe un puerto con este ID en el componente.', type: 'error' });
+          setNotification({ message: `Error: Ya existe un puerto con el ID "${newPort.id}" en el componente.`, type: 'error' });
           return node;
         }
         return {
@@ -396,7 +389,7 @@ const App: React.FC = () => {
       }
       return node;
     }));
-    setNotification({ message: `Puerto conjugado "${nominalPort.name}" añadido con éxito.`, type: 'success' });
+    setNotification({ message: `Puerto conjugado "${newPort.name}" añadido con éxito.`, type: 'success' });
     setMenu(null);
   }, [nodes, setNodes, setMenu, setNotification]);
 
@@ -404,38 +397,79 @@ const App: React.FC = () => {
   /**
    * Elimina un puerto y sus conexiones asociadas.
    */
-  const handleDeletePort = useCallback((nodeId: string, portId: string) => {
-    const edgesToDelete = edges.filter(edge => edge.sourceHandle === portId || edge.targetHandle === portId);
+   const handleDeletePort = useCallback((nodeId: string, portId: string) => {
+    const currentNodes = getNodes();
+    const currentEdges = getEdges();
 
-    if (edgesToDelete.length > 0) {
-      const confirmation = window.confirm("Este puerto está conectado. ¿Estás seguro de que quieres eliminar el puerto y todas sus conexiones?");
-      if (!confirmation) {
-          return;
-      }
-      setEdges((eds) => eds.filter(edge => !edgesToDelete.includes(edge)));
+    const nodeToDeleteFrom = currentNodes.find((n) => n.id === nodeId);
+    const portToDelete = nodeToDeleteFrom?.data.ports.find((p: PortData) => p.id === portId);
+
+    if (!portToDelete) return;
+
+    // Caso 1: Borrar un puerto nominal conectado. Deberíamos borrar también su conjugado.
+    if (portToDelete.type === 'comunicacion' && portToDelete.subtype === 'nominal') {
+        const connection = currentEdges.find((edge) => edge.source === nodeId && edge.sourceHandle === portId);
+
+        if (connection) {
+            const confirmation = window.confirm("Este puerto nominal está conectado. ¿Estás seguro de que quieres eliminarlo junto con su puerto conjugado y la conexión?");
+            if (!confirmation) return;
+
+            const conjugateNodeId = connection.target;
+            const conjugatePortId = connection.targetHandle;
+
+            // Realizar el borrado en cascada
+            setNodes((nds) =>
+                nds.map((n) => {
+                    let ports = n.data.ports;
+                    if (n.id === nodeId) { // Borrar el puerto nominal
+                        ports = ports.filter((p) => p.id !== portId);
+                    }
+                    if (n.id === conjugateNodeId) { // Borrar el puerto conjugado
+                        ports = ports.filter((p) => p.id !== conjugatePortId);
+                    }
+                    return { ...n, data: { ...n.data, ports: ports } };
+                })
+            );
+            setEdges((eds) => eds.filter((e) => e.id !== connection.id));
+            setNotification({ message: 'Puerto nominal, conjugado y conexión eliminados.', type: 'success' });
+            setSelectedPort(null);
+            return;
+        }
     }
-    setNodes((nds) => nds.map(node => {
-      if (node.id === nodeId) {
-        const updatedPorts = node.data.ports.filter(p => p.id !== portId);
-        return { ...node, data: { ...node.data, ports: updatedPorts } };
-      }
-      return node;
-    }));
+
+    // Caso 2: Comportamiento por defecto para otros puertos (o nominales no conectados)
+    const otherEdgesToDelete = currentEdges.filter(
+        (edge) => (edge.source === nodeId && edge.sourceHandle === portId) || (edge.target === nodeId && edge.targetHandle === portId)
+    );
+
+    if (otherEdgesToDelete.length > 0) {
+        if (!window.confirm("Este puerto está conectado. ¿Estás seguro de que quieres eliminar el puerto y todas sus conexiones?")) {
+            return;
+        }
+    }
+
+    setEdges((eds) => eds.filter((edge) => !otherEdgesToDelete.includes(edge)));
+    setNodes((nds) =>
+        nds.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, ports: n.data.ports.filter((p) => p.id !== portId) } } : n))
+    );
+    
     setSelectedPort(null);
     setNotification({ message: 'Puerto eliminado.', type: 'success' });
-  }, [setNodes, setEdges, edges, setSelectedPort, setNotification]);
+  }, [getNodes, getEdges, setNodes, setEdges, setNotification, setSelectedPort]);
 
   /**
    * Selecciona un puerto para mostrar su información.
    */
   const handlePortClick = useCallback((portData: PortData, nodeId: string) => {
-    // Si el panel del mismo puerto ya está abierto, lo cierra.
-    if (selectedPort && selectedPort.port.id === portData.id) {
-        setSelectedPort(null);
-    } else {
-        setSelectedPort({ port: portData, nodeId });
-    }
-  }, [selectedPort]);
+    setSelectedPort(currentSelected => {
+        // Si el panel del mismo puerto (mismo ID y mismo nodo) ya está abierto, lo cierra.
+        if (currentSelected && currentSelected.port.id === portData.id && currentSelected.nodeId === nodeId) {
+            return null;
+        }
+        // Si no, abre el panel para el puerto clicado.
+        return { port: portData, nodeId };
+    });
+  }, [setSelectedPort]);
 
   /**
    * Actualiza la lista de mensajes de un puerto.
@@ -469,11 +503,8 @@ const App: React.FC = () => {
       const connectedNodeId = isSource ? connection.target : connection.source;
       const connectedPortId = isSource ? connection.targetHandle : connection.sourceHandle;
 
-      // Los mensajes del puerto conectado son un "espejo" de los del puerto editado
-      const mirroredMessages: Message[] = newMessages.map(msg => ({
-        ...msg,
-        direction: msg.direction === 'entrada' ? 'salida' : 'entrada',
-      }));
+      // Los mensajes del puerto conectado se sincronizan para ser idénticos.
+      const syncedMessages: Message[] = newMessages.map(msg => ({ ...msg }));
 
       // Actualizar ambos puertos en el estado de los nodos
       return prevNodes.map(node => {
@@ -493,7 +524,7 @@ const App: React.FC = () => {
             ...node,
             data: {
               ...node.data,
-              ports: node.data.ports.map(p => (p.id === connectedPortId ? { ...p, messages: mirroredMessages } : p)),
+              ports: node.data.ports.map(p => (p.id === connectedPortId ? { ...p, messages: syncedMessages } : p)),
             },
           };
         }

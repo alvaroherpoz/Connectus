@@ -37,8 +37,8 @@ export class edroomdeployment_h_template {
         const componentMemoryDeclarations = nodes.map(c => {
             const instanceName = this.getInstanceName(c, localNodeName);
             const maxMessages = c.data.maxMessages;
-            const maxQueueNodes = c.data.maxMessages; 
-            
+            const maxQueueNodes = this.calculateMaxQueueNodes(c);
+
             return `
     //!Messages Memory of component ${instanceName}
     CEDROOMMessage ${instanceName}Messages[${maxMessages}];
@@ -64,11 +64,11 @@ export class edroomdeployment_h_template {
             
             const sourceId = sourceNode?.data.componentId;
             const sourceName = sourceNode?.data.name.replace(/\s/g, '');
-            const sourcePort = this.getPortsFromEdge(conn, 'source');
+            const sourcePort = this.getPortNameFromEdge(nodes, conn, 'source');
             
             const targetId = targetNode?.data.componentId;
             const targetName = targetNode?.data.name.replace(/\s/g, '');
-            const targetPort = this.getPortsFromEdge(conn, 'target');
+            const targetPort = this.getPortNameFromEdge(nodes, conn, 'target');
 
             return `
 //Signal Conversion
@@ -321,6 +321,47 @@ ${getMemoryFunctions}
     // --- Funciones auxiliares para la lógica de la plantilla ---
     
     /**
+     * Calcula el número máximo de nodos de cola para un componente.
+     * @param node - El nodo del componente.
+     * @returns El número de nodos de cola.
+     */
+    private static calculateMaxQueueNodes(node: Node<NodeData>): number {
+        let asyncMessagesCount = 0;
+        let invokePortsCount = 0;
+        let timerPortsCount = 0;
+
+        node.data.ports.forEach(port => {
+            if (port.type === 'tiempo') {
+                timerPortsCount++;
+            }
+
+            if (port.type === 'comunicacion' && port.messages) {
+                let hasEffectiveInvokeEntrada = false;
+                port.messages.forEach(message => {
+                    if (message.type === 'async') {
+                        asyncMessagesCount++;
+                    }
+                    if (message.type === 'invoke') {
+                        const isEntrada = message.direction === 'entrada';
+                        const isConjugado = port.subtype === 'conjugado';
+                        // La dirección efectiva de entrada es:
+                        // - 'entrada' en un puerto nominal
+                        // - 'salida' en un puerto conjugado (porque es la perspectiva del componente)
+                        if ((isEntrada && !isConjugado) || (!isEntrada && isConjugado)) {
+                            hasEffectiveInvokeEntrada = true;
+                        }
+                    }
+                });
+                if (hasEffectiveInvokeEntrada) {
+                    invokePortsCount++;
+                }
+            }
+        });
+        // El cálculo es: num_mensajes_async + num_puertos_con_invoke_entrada + num_puertos_tiempo
+        return asyncMessagesCount + invokePortsCount + timerPortsCount;
+    }
+    
+    /**
      * Obtiene el nombre de instancia para un nodo dado.
      * @param node - Nodo del diagrama.
      * @param localNodeName - Nombre del nodo local.
@@ -356,7 +397,7 @@ ${getMemoryFunctions}
             return `CC${componentType}`;
         }
     }
-    
+
     /**
      * Obtiene el prefijo de inclusión para un nodo.
      * @param node - Nodo del diagrama.
@@ -376,9 +417,9 @@ ${getMemoryFunctions}
             return 'cc';
         }
     }
-    
+
     private static portCounter: Record<string, number> = {};
-    
+
     /**
      * Reinicia el contador de sufijos de puertos.
      */
@@ -386,28 +427,22 @@ ${getMemoryFunctions}
         this.portCounter = {};
     }
 
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-expect-error
-    private static _getPortSuffix(portName: string): string {
-        this.portCounter[portName] = (this.portCounter[portName] || 0) + 1;
-        if (this.portCounter[portName] > 1) {
-            return this.portCounter[portName].toString();
-        }
-        return '';
-    }
-    
     /**
-     * Obtiene el identificador de puerto desde un edge.
+     * Obtiene el nombre del puerto desde un edge.
      * @param edge - Conexión entre nodos.
      * @param type - Tipo de puerto ('source' o 'target').
-     * @returns Identificador del puerto.
+     * @returns Nombre del puerto.
      */
-    private static getPortsFromEdge(edge: Edge, type: 'source' | 'target'): string {
-        const portHandle = type === 'source' ? edge.sourceHandle : edge.targetHandle;
-        if (portHandle) {
-            const parts = portHandle.split('-');
-            return parts[1] || '';
+    private static getPortNameFromEdge(nodes: Node<NodeData>[], edge: Edge, type: 'source' | 'target'): string {
+        const nodeId = type === 'source' ? edge.source : edge.target;
+        const portId = type === 'source' ? edge.sourceHandle : edge.targetHandle;
+
+        if (!nodeId || !portId) {
+            return '';
         }
-        return '';
+        const node = nodes.find(n => n.id === nodeId);
+        const port = node?.data.ports.find(p => p.id === portId);
+        
+        return port ? port.name.replace(/\s/g, '') : '';
     }
 }

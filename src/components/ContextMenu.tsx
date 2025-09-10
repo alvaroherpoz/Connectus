@@ -17,8 +17,8 @@ interface ContextMenuProps {
     y: number;
     // CORRECCIÓN: Ahora onAddPort acepta el nodeId como primer parámetro
     onAddPort: (nodeId: string, name: string, portId: string, type: 'comunicacion' | 'tiempo' | 'interrupcion', subtype?: 'nominal' | 'conjugado', protocolName?: string, messages?: Message[], interruptHandler?: string) => void;
-    // Modificamos onAddConjugatePort para que acepte el 'id' y el 'name' del nuevo puerto conjugado
-    onAddConjugatePort: (nodeId: string, nominalPortId: string, newConjugatePortId: string, newConjugatePortName: string) => void;
+    // Modificamos onAddConjugatePort para que acepte un ID compuesto del puerto nominal de origen
+    onAddConjugatePort: (targetNodeId: string, compositeNominalPortId: string, newConjugatePortId: string, newConjugatePortName: string) => void;
     onClose: () => void;
     handleAddDataType: (newType: string) => void;
     nodes: Node<NodeData>[];
@@ -90,18 +90,32 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
          }
  
          if (messageType === 'reply') {
-             // Check if an invoke exists in the protocol (existing ports + new port messages)
-             const invokeExists = nodes.some(node =>
-                 node.data.ports.some(p =>
-                     p.protocolName === protocolName && p.messages?.some(m => m.type === 'invoke' && m.signal === messageSignal)
-                 )
-             ) || messages.some(m => m.type === 'invoke' && m.signal === messageSignal);
+            // Find the corresponding invoke message
+            let invokeMessage: Message | undefined;
+            for (const node of nodes) {
+                for (const p of node.data.ports) {
+                    if (p.protocolName === protocolName && p.messages) {
+                        invokeMessage = p.messages.find(m => m.type === 'invoke' && m.signal === messageSignal);
+                        if (invokeMessage) break;
+                    }
+                }
+                if (invokeMessage) break;
+            }
+            if (!invokeMessage) {
+                invokeMessage = messages.find(m => m.type === 'invoke' && m.signal === messageSignal);
+            }
  
-             if (!invokeExists) {
+             if (!invokeMessage) {
                  setNotification({ message: `Un mensaje de tipo "reply" requiere un mensaje "invoke" con la misma señal en el protocolo "${protocolName}".`, type: 'error' });
                  return;
              }
  
+            // Validate direction: must be opposite to the invoke message
+            if (invokeMessage.direction === messageDirection) {
+                setNotification({ message: `Error: La dirección del "reply" (${messageDirection}) debe ser opuesta a la del "invoke" (${invokeMessage.direction}).`, type: 'error' });
+                return;
+            }
+
              // Check if a reply already exists for this signal
              const replyExists = nodes.some(node =>
                  node.data.ports.some(p =>
@@ -121,6 +135,23 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
          setMessageDataType('');
          setNotification(null); // Clear previous error notifications
      }, [messageSignal, messageDataType, messageDirection, messageType, messages, protocolName, nodes, setNotification]);
+
+    /**
+     * Checks if an invoke message with the same signal exists in the protocol.
+     */
+    const invokeExistsInProtocol = useCallback((signal: string): boolean => {
+        if (!signal) return false;
+        // Check in existing ports
+        const inExistingPorts = nodes.some(node =>
+            node.data.ports.some(p =>
+                p.protocolName === protocolName && p.messages?.some(m => m.type === 'invoke' && m.signal === signal)
+            )
+        );
+        if (inExistingPorts) return true;
+
+        // Check in messages being added to the new port
+        return messages.some(m => m.type === 'invoke' && m.signal === signal);
+    }, [nodes, protocolName, messages]);
 
     /**
      * Elimina un mensaje del listado.
@@ -211,7 +242,10 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
             return;
         }
         
-        const nominalPort = nodes.flatMap(n => n.data.ports).find(p => p.id === selectedNominalPort);
+        const [nominalNodeId, nominalPortId] = selectedNominalPort.split(':');
+        const nominalNode = nodes.find(n => n.id === nominalNodeId);
+        const nominalPort = nominalNode?.data.ports.find(p => p.id === nominalPortId);
+
         if (!nominalPort) {
             setNotification({ message: 'No se encontró el puerto nominal seleccionado.', type: 'error' });
             return;
@@ -230,28 +264,19 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
             return;
         }
 
-        // Validación 2: Unicidad del ID y nombre a nivel de PROTOCOLO
-        const isDuplicateInProtocol = nodes.some(node =>
-            node.data.ports.some(p =>
-                (p.protocolName === nominalPort.protocolName) && // Mismo protocolo que el nominal
-                (p.id === trimmedId) // Mismo ID
-            )
-        );
+        // Validación 2: Unicidad del ID y nombre a nivel de COMPONENTE
+        const targetNode = nodes.find(node => node.id === nodeId);
+        if (!targetNode) return;
 
-        if (isDuplicateInProtocol) {
-            setNotification({ message: `Ya existe un puerto con el ID "${trimmedId}" en el protocolo "${nominalPort.protocolName}".`, type: 'error' });
+        const isDuplicateId = targetNode.data.ports.some(p => p.id === trimmedId);
+        if (isDuplicateId) {
+            setNotification({ message: `Ya existe un puerto con el ID "${trimmedId}" en este componente.`, type: 'error' });
             return;
         }
 
-        const isDuplicateName = nodes.some(node =>
-            node.data.ports.some(p =>
-                (p.protocolName === nominalPort.protocolName) && // Mismo protocolo que el nominal
-                (p.name === trimmedName) // Mismo nombre
-            )
-        );
-
+        const isDuplicateName = targetNode.data.ports.some(p => p.name === trimmedName);
         if (isDuplicateName) {
-            setNotification({ message: `Ya existe un puerto con el nombre "${trimmedName}" en el protocolo "${nominalPort.protocolName}".`, type: 'error' });
+            setNotification({ message: `Ya existe un puerto con el nombre "${trimmedName}" en este componente.`, type: 'error' });
             return;
         }
 
@@ -357,7 +382,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
                             <select id="message-type" value={messageType} onChange={(e: ChangeEvent<HTMLSelectElement>) => setMessageType(e.target.value as MessageType)} title="Tipo de Mensaje">
                                 <option value="invoke">invoke</option>
                                 <option value="async">async</option>
-                                <option value="reply" disabled={!messages.some(msg => msg.type === 'invoke')}>reply</option>
+                                <option value="reply" disabled={!invokeExistsInProtocol(messageSignal)}>reply</option>
                             </select>
                             <button type="button" onClick={handleAddMessage}>Añadir</button>
                         </div>
@@ -393,7 +418,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
         const nominalPorts = nodes.flatMap(node =>
             node.data.ports
                 .filter(port => port.type === 'comunicacion' && port.subtype === 'nominal')
-                .map(port => ({ ...port, componentName: node.data.name }))
+                .map(port => ({ ...port, componentName: node.data.name, nodeId: node.id }))
         );
 
         return (
@@ -403,7 +428,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
                 <select id="nominal-port-select" onChange={(e) => { setSelectedNominalPort(e.target.value); setNewConjugatePortId(''); setNewConjugatePortName(''); setNotification(null); }} value={selectedNominalPort || ""} title="Seleccionar puerto nominal">
                     <option value="">Selecciona un puerto...</option>
                     {nominalPorts.map(port => (
-                        <option key={port.id} value={port.id}>
+                        <option key={`${port.nodeId}:${port.id}`} value={`${port.nodeId}:${port.id}`}>
                             {port.componentName} - {port.name} ({port.protocolName})
                         </option>
                     ))}
