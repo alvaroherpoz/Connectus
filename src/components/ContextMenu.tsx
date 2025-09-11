@@ -1,7 +1,5 @@
 /**
- * ContextMenu.tsx
- * Menú contextual para realizar acciones sobre nodos y puertos en el diagrama.
- * Permite añadir puertos, generar puertos conjugados, editar atributos y eliminar componentes.
+ * @fileoverview Menú contextual para realizar acciones sobre los nodos del diagrama.
  */
 
 import React, { useState, useCallback } from 'react';
@@ -10,27 +8,38 @@ import type { Message, Node, NodeData, MessageType} from './types';
 import '../types/ContextMenu.css';
 
 /**
- * Props del componente ContextMenu.
+ * Props para el componente ContextMenu.
+ * @interface ContextMenuProps
  */
 interface ContextMenuProps {
+    /** Coordenada X para posicionar el menú. */
     x: number;
+    /** Coordenada Y para posicionar el menú. */
     y: number;
-    // CORRECCIÓN: Ahora onAddPort acepta el nodeId como primer parámetro
-    onAddPort: (nodeId: string, name: string, portId: string, type: 'comunicacion' | 'tiempo' | 'interrupcion', subtype?: 'nominal' | 'conjugado', protocolName?: string, messages?: Message[], interruptHandler?: string) => void;
-    // Modificamos onAddConjugatePort para que acepte un ID compuesto del puerto nominal de origen
+    /** Función para añadir un puerto al nodo. */
+    onAddPort: (nodeId: string, name: string, portId: string, type: 'comunicacion' | 'tiempo' | 'interrupcion', subtype?: 'nominal' | 'conjugado', protocolName?: string, messages?: Message[]) => void;
+    /** Función para añadir un puerto conjugado a partir de uno nominal. */
     onAddConjugatePort: (targetNodeId: string, compositeNominalPortId: string, newConjugatePortId: string, newConjugatePortName: string) => void;
+    /** Función para cerrar el menú. */
     onClose: () => void;
+    /** Función para añadir un nuevo tipo de dato personalizado. */
     handleAddDataType: (newType: string) => void;
+    /** Array de todos los nodos del diagrama. */
     nodes: Node<NodeData>[];
+    /** ID del nodo sobre el que se ha abierto el menú. */
     nodeId: string;
+    /** Función para eliminar el nodo. */
     onDeleteNode: (nodeId: string) => void;
+    /** Función para abrir el panel de edición de atributos del nodo. */
     onEditAttributes: () => void;
+    /** Lista de tipos de datos personalizados. */
     dataTypes: string[];
+    /** Función para mostrar notificaciones. */
     setNotification: (notification: { message: string; type: 'success' | 'error' | 'info' } | null) => void;
 }
 
 /**
- * Tipos de datos Basicos de EDROOM.
+ * Lista de tipos de datos fijos y predefinidos en EDROOM.
  */
 const fixedDataTypesList = [
     'CDEventList', 'CDRecovAction', 'CDSensorTMBufferStatus', 'CDTCDescriptor', 'CDTMList',
@@ -40,15 +49,16 @@ const fixedDataTypesList = [
 ];
 
 /**
- * Menú contextual para acciones sobre nodos y puertos.
+ * Componente que renderiza un menú contextual con opciones para un nodo.
+ * @param {ContextMenuProps} props - Las props del componente.
+ * @returns {React.ReactElement} El menú contextual.
  */
 const ContextMenu: React.FC<ContextMenuProps> = ({
     x, y, onAddPort, onAddConjugatePort, onClose, handleAddDataType,
     nodes, nodeId, onDeleteNode, onEditAttributes, dataTypes, setNotification
 }) => {
-    // Estado interno para la vista actual y datos de formularios
     const [view, setView] = useState<'main' | 'addPort' | 'generateConjugate'>('main');
-    const [portId, setPortId] = useState(''); // Estado para el nuevo ID del puerto
+    const [portId, setPortId] = useState('');
     const [portName, setPortName] = useState('');
     const [portType, setPortType] = useState<'comunicacion' | 'tiempo' | 'interrupcion'>('comunicacion');
     const [protocolName, setProtocolName] = useState('');
@@ -57,111 +67,102 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
     const [messageDataType, setMessageDataType] = useState('');
     const [messageDirection, setMessageDirection] = useState<'entrada' | 'salida'>('entrada');
     const [messageType, setMessageType] = useState<MessageType>('invoke');
-    const [interruptHandler, setInterruptHandler] = useState('');
+    const [selectedInvokeSignal, setSelectedInvokeSignal] = useState('');
     const [selectedNominalPort, setSelectedNominalPort] = useState<string | null>(null);
     const [newConjugatePortName, setNewConjugatePortName] = useState('');
-    const [newConjugatePortId, setNewConjugatePortId] = useState(''); // Estado para el ID del nuevo puerto conjugado
+    const [newConjugatePortId, setNewConjugatePortId] = useState('');
     const [newDataTypeName, setNewDataTypeName] = useState('');
     const [showNewDataTypeInput, setShowNewDataTypeInput] = useState(false);
 
     /**
-     * Añade un mensaje al puerto de comunicación.
+     * Recopila todos los mensajes de tipo 'invoke' que existen en el protocolo actual,
+     * tanto en el puerto que se está creando como en otros puertos del diagrama.
+     * @returns {Message[]} Una lista de mensajes 'invoke'.
+     */
+    const getInvokeMessagesInProtocol = useCallback((): Message[] => {
+        const invokes: Message[] = [];
+        const invokeSignals = new Set<string>();
+
+        // Revisa los mensajes que se están añadiendo al puerto nuevo
+        messages.filter(m => m.type === 'invoke').forEach(m => {
+            invokes.push(m);
+            invokeSignals.add(m.signal);
+        });
+
+        // Revisa los mensajes en puertos existentes del mismo protocolo
+        nodes.forEach(node => node.data.ports.forEach(p => {
+            if (p.protocolName === protocolName && p.messages) {
+                p.messages.forEach(m => {
+                    if (m.type === 'invoke' && !invokeSignals.has(m.signal)) {
+                        invokes.push(m);
+                        invokeSignals.add(m.signal);
+                    }
+                });
+            }
+        }));
+        return invokes;
+    }, [nodes, protocolName, messages]);
+
+    /**
+     * Añade un nuevo mensaje a la lista de mensajes del puerto que se está creando.
+     * Realiza validaciones de unicidad y consistencia para los mensajes.
      */
     const handleAddMessage = useCallback(() => {
          if (!messageSignal || !messageDataType) {
-             return; // No-op if fields are empty
+             return;
          }
  
-         // --- VALIDATION ---
-         if (messageType === 'invoke' || messageType === 'async') {
-             // Check for duplicates in existing ports
-             const isDuplicateInExistingPorts = nodes.some(node =>
-                 node.data.ports.some(p =>
-                     p.protocolName === protocolName && p.messages?.some(m => m.signal === messageSignal)
-                 )
-             );
-             // Check for duplicates in the messages being added to the new port
-             const isDuplicateInNewMessages = messages.some(m => m.signal === messageSignal);
- 
-             if (isDuplicateInExistingPorts || isDuplicateInNewMessages) {
-                 setNotification({ message: `Error: Ya existe un mensaje con la señal "${messageSignal}" en el protocolo "${protocolName}".`, type: 'error' });
-                 return;
-             }
+         const isSignalDuplicate = nodes.some(node =>
+            node.data.ports.some(p =>
+                p.protocolName === protocolName && p.messages?.some(m => m.signal === messageSignal)
+            )
+         ) || messages.some(m => m.signal === messageSignal);
+
+         if (isSignalDuplicate) {
+            setNotification({ message: `Error: Ya existe un mensaje con la señal "${messageSignal}" en el protocolo "${protocolName}".`, type: 'error' });
+            return;
          }
  
          if (messageType === 'reply') {
-            // Find the corresponding invoke message
-            let invokeMessage: Message | undefined;
-            for (const node of nodes) {
-                for (const p of node.data.ports) {
-                    if (p.protocolName === protocolName && p.messages) {
-                        invokeMessage = p.messages.find(m => m.type === 'invoke' && m.signal === messageSignal);
-                        if (invokeMessage) break;
-                    }
-                }
-                if (invokeMessage) break;
+            if (!selectedInvokeSignal) {
+                setNotification({ message: 'Error: Debe seleccionar a qué mensaje "invoke" responde este "reply".', type: 'error' });
+                return;
             }
-            if (!invokeMessage) {
-                invokeMessage = messages.find(m => m.type === 'invoke' && m.signal === messageSignal);
-            }
+
+            const invokeMessage = getInvokeMessagesInProtocol().find(m => m.signal === selectedInvokeSignal);
  
              if (!invokeMessage) {
-                 setNotification({ message: `Un mensaje de tipo "reply" requiere un mensaje "invoke" con la misma señal en el protocolo "${protocolName}".`, type: 'error' });
+                 setNotification({ message: `Error: No se encontró el "invoke" seleccionado.`, type: 'error' });
                  return;
              }
  
-            // Validate direction: must be opposite to the invoke message
             if (invokeMessage.direction === messageDirection) {
                 setNotification({ message: `Error: La dirección del "reply" (${messageDirection}) debe ser opuesta a la del "invoke" (${invokeMessage.direction}).`, type: 'error' });
                 return;
             }
-
-             // Check if a reply already exists for this signal
-             const replyExists = nodes.some(node =>
-                 node.data.ports.some(p =>
-                     p.protocolName === protocolName && p.messages?.some(m => m.type === 'reply' && m.signal === messageSignal)
-                 )
-             ) || messages.some(m => m.type === 'reply' && m.signal === messageSignal);
- 
-             if (replyExists) {
-                 setNotification({ message: `Error: Ya existe un "reply" para la señal "${messageSignal}" en el protocolo "${protocolName}".`, type: 'error' });
-                 return;
-             }
          }
  
-         // --- ADD LOGIC ---
-         setMessages(prev => [...prev, { signal: messageSignal, dataType: messageDataType, direction: messageDirection, type: messageType }]);
+         const newMessage: Message = { signal: messageSignal, dataType: messageDataType, direction: messageDirection, type: messageType };
+         if (messageType === 'reply') {
+            newMessage.invokeSignal = selectedInvokeSignal;
+         }
+         setMessages(prev => [...prev, newMessage]);
          setMessageSignal('');
          setMessageDataType('');
-         setNotification(null); // Clear previous error notifications
-     }, [messageSignal, messageDataType, messageDirection, messageType, messages, protocolName, nodes, setNotification]);
+         setSelectedInvokeSignal('');
+         setNotification(null);
+     }, [messageSignal, messageDataType, messageDirection, messageType, messages, protocolName, nodes, setNotification, getInvokeMessagesInProtocol, selectedInvokeSignal]);
 
     /**
-     * Checks if an invoke message with the same signal exists in the protocol.
-     */
-    const invokeExistsInProtocol = useCallback((signal: string): boolean => {
-        if (!signal) return false;
-        // Check in existing ports
-        const inExistingPorts = nodes.some(node =>
-            node.data.ports.some(p =>
-                p.protocolName === protocolName && p.messages?.some(m => m.type === 'invoke' && m.signal === signal)
-            )
-        );
-        if (inExistingPorts) return true;
-
-        // Check in messages being added to the new port
-        return messages.some(m => m.type === 'invoke' && m.signal === signal);
-    }, [nodes, protocolName, messages]);
-
-    /**
-     * Elimina un mensaje del listado.
+     * Elimina un mensaje de la lista de mensajes del puerto.
+     * @param {number} index - El índice del mensaje a eliminar.
      */
     const handleRemoveMessage = useCallback((index: number) => {
         setMessages((prevMessages) => prevMessages.filter((_, i) => i !== index));
     }, []);
 
     /**
-     * Añade un nuevo tipo de dato personalizado.
+     * Añade un nuevo tipo de dato a la lista global de tipos de datos personalizados.
      */
     const handleAddNewDataType = useCallback(() => {
         if (newDataTypeName.trim()) {
@@ -173,7 +174,9 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
     }, [newDataTypeName, handleAddDataType, setMessageDataType]);
 
     /**
-     * Cambia el tipo de dato seleccionado para el mensaje.
+     * Maneja el cambio en el selector de tipo de dato, mostrando un campo de texto
+     * si se selecciona la opción "Otro tipo de dato...".
+     * @param {ChangeEvent<HTMLSelectElement>} e - El evento de cambio.
      */
     const handleDataTypeChange = useCallback((e: ChangeEvent<HTMLSelectElement>) => {
         const selectedType = e.target.value;
@@ -187,7 +190,8 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
     }, []);
 
     /**
-     * Envía el formulario para añadir un puerto.
+     * Procesa y valida los datos del formulario para añadir un nuevo puerto.
+     * @param {FormEvent} e - El evento del formulario.
      */
     const handleSubmitPort = useCallback((e: FormEvent) => {
         e.preventDefault();
@@ -196,7 +200,6 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
         const trimmedName = portName.trim();
         const trimmedProtocolName = protocolName.trim();
 
-        // Validación 1: ID y nombre no vacíos y el ID solo contiene números
         if (!trimmedId || !/^\d+$/.test(trimmedId)) {
             setNotification({ message: 'El ID del puerto es obligatorio y debe contener solo números.', type: 'error' });
             return;
@@ -206,13 +209,11 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
             return;
         }
 
-        // Validación 2: El nombre del protocolo es obligatorio para puertos de comunicación
         if (portType === 'comunicacion' && !trimmedProtocolName) {
             setNotification({ message: 'El nombre del protocolo es obligatorio para puertos de comunicación.', type: 'error' });
             return;
         }
 
-        // Validación 3: Unicidad del ID y nombre a nivel de COMPONENTE
         const targetNode = nodes.find(node => node.id === nodeId);
         if (!targetNode) return;
 
@@ -228,13 +229,13 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
             return;
         }
         
-        // Si todas las validaciones pasan, se procede a añadir el puerto
-        onAddPort(nodeId, trimmedName, trimmedId, portType, 'nominal', trimmedProtocolName, messages, interruptHandler);
+        onAddPort(nodeId, trimmedName, trimmedId, portType, 'nominal', trimmedProtocolName, messages);
         onClose();
-    }, [onAddPort, portId, portName, portType, protocolName, messages, interruptHandler, onClose, nodes, nodeId, setNotification]);
+    }, [onAddPort, portId, portName, portType, protocolName, messages, onClose, nodes, nodeId, setNotification]);
 
     /**
-     * Genera un puerto conjugado a partir de un puerto nominal seleccionado.
+     * Procesa y valida los datos para crear un puerto conjugado a partir de un
+     * puerto nominal seleccionado.
      */
     const handleGenerateConjugate = useCallback(() => {
         if (!selectedNominalPort) {
@@ -254,7 +255,6 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
         const trimmedId = newConjugatePortId.trim();
         const trimmedName = newConjugatePortName.trim();
 
-        // Validación 1: ID y nombre no vacíos y el ID solo contiene números
         if (!trimmedId || !/^\d+$/.test(trimmedId)) {
             setNotification({ message: 'El ID del nuevo puerto debe contener solo números.', type: 'error' });
             return;
@@ -264,7 +264,6 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
             return;
         }
 
-        // Validación 2: Unicidad del ID y nombre a nivel de COMPONENTE
         const targetNode = nodes.find(node => node.id === nodeId);
         if (!targetNode) return;
 
@@ -280,13 +279,13 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
             return;
         }
 
-        // Si todas las validaciones pasan, se procede a crear el puerto conjugado
         onAddConjugatePort(nodeId, selectedNominalPort, trimmedId, trimmedName);
         onClose();
     }, [onAddConjugatePort, nodeId, selectedNominalPort, onClose, nodes, setNotification, newConjugatePortId, newConjugatePortName]);
 
     /**
-     * Renderiza la vista principal del menú.
+     * Renderiza la vista principal del menú contextual con las acciones generales.
+     * @returns {React.ReactElement}
      */
     const renderMainView = () => (
         <>
@@ -308,7 +307,8 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
     );
 
     /**
-     * Renderiza el formulario para añadir un puerto.
+     * Renderiza el formulario para añadir un nuevo puerto.
+     * @returns {React.ReactElement}
      */
     const renderAddPortView = () => (
         <form onSubmit={handleSubmitPort}>
@@ -350,13 +350,29 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
                             <div className="message-list">
                                 {messages.map((msg, index) => (
                                     <div key={index} className="message-item">
-                                        <span>{msg.signal} - {msg.dataType} ({msg.direction}) [{msg.type}]</span>
+                                        <span>
+                                            {msg.signal} - {msg.dataType} ({msg.direction}) [{msg.type}]
+                                            {msg.type === 'reply' && msg.invokeSignal && ` (reply a ${msg.invokeSignal})`}
+                                        </span>
                                         <button type="button" onClick={() => handleRemoveMessage(index)} className="delete-message-btn">X</button>
                                     </div>
                                 ))}
                             </div>
                         )}
                         <div className="add-message-container">
+                            <select id="message-type" value={messageType} onChange={(e: ChangeEvent<HTMLSelectElement>) => setMessageType(e.target.value as MessageType)} title="Tipo de Mensaje">
+                                <option value="invoke">invoke</option>
+                                <option value="async">async</option>
+                                <option value="reply" disabled={getInvokeMessagesInProtocol().length === 0}>reply</option>
+                            </select>
+                            {messageType === 'reply' && (
+                                <select value={selectedInvokeSignal} onChange={(e) => setSelectedInvokeSignal(e.target.value)} title="Invoke al que responde">
+                                    <option value="">Responde a...</option>
+                                    {getInvokeMessagesInProtocol().map(invoke => (
+                                        <option key={invoke.signal} value={invoke.signal}>{invoke.signal}</option>
+                                    ))}
+                                </select>
+                            )}
                             <input
                                 id="message-signal"
                                 type="text"
@@ -366,7 +382,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
                             />
                             <select id="message-data-type" value={messageDataType} onChange={handleDataTypeChange} title="Tipo de Dato">
                                 <option value="">Tipo de Dato</option>
-                                <option value="void">void (sin dato)</option>
+                                <option value="NULL">null </option>
                                 {fixedDataTypesList.map((dt) => (
                                     <option key={dt} value={dt}>{dt}</option>
                                 ))}
@@ -378,11 +394,6 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
                             <select id="message-direction" value={messageDirection} onChange={(e: ChangeEvent<HTMLSelectElement>) => setMessageDirection(e.target.value as 'entrada' | 'salida')} title="Dirección del Mensaje">
                                 <option value="entrada">Entrada</option>
                                 <option value="salida">Salida</option>
-                            </select>
-                            <select id="message-type" value={messageType} onChange={(e: ChangeEvent<HTMLSelectElement>) => setMessageType(e.target.value as MessageType)} title="Tipo de Mensaje">
-                                <option value="invoke">invoke</option>
-                                <option value="async">async</option>
-                                <option value="reply" disabled={!invokeExistsInProtocol(messageSignal)}>reply</option>
                             </select>
                             <button type="button" onClick={handleAddMessage}>Añadir</button>
                         </div>
@@ -400,12 +411,6 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
                     </div>
                 </>
             )}
-            {portType === 'interrupcion' && (
-                <label htmlFor="interrupt-handler">
-                    Handler:
-                    <textarea id="interrupt-handler" value={interruptHandler} onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setInterruptHandler(e.target.value)} />
-                </label>
-            )}
             <button type="submit">Añadir Puerto</button>
             <button type="button" onClick={() => { setNotification(null); setView('main'); }}>Volver</button>
         </form>
@@ -413,6 +418,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
 
     /**
      * Renderiza el formulario para generar un puerto conjugado.
+     * @returns {React.ReactElement}
      */
     const renderGenerateConjugateView = () => {
         const nominalPorts = nodes.flatMap(node =>
@@ -459,7 +465,6 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
         );
     };
 
-    // Renderizado principal del menú contextual
     return (
         <div className="context-menu" style={{ top: y, left: x }}>
             {view === 'main' && renderMainView()}

@@ -1,7 +1,6 @@
 /**
- * ComponentNode.tsx
- * Componente visual que representa un nodo en el diagrama.
- * Muestra los puertos, permite eliminarlos y acceder a su información.
+ * @fileoverview Componente visual que representa un nodo (componente EDROOM) en el diagrama.
+ * Muestra el nombre, el nodo lógico y los puertos del componente.
  */
 
 import React, { memo, useCallback } from 'react';
@@ -11,20 +10,28 @@ import type { NodeData, PortData } from './types';
 import '../types/ComponentNode.css';
 
 /**
- * Props del componente ComponentNode.
+ * Props para el componente ComponentNode.
+ * @interface ComponentNodeProps
  */
 interface ComponentNodeProps extends NodeProps<NodeData> {
+    /** Función para eliminar un puerto del nodo. */
     onDeletePort: (nodeId: string, portId: string) => void;
+    /** Función que se ejecuta al hacer clic en un puerto. */
     onPortClick: (portData: PortData, nodeId: string) => void;
 }
 
 /**
- * Componente visual para un nodo del diagrama.
+ * Componente que renderiza la representación visual de un nodo en el diagrama.
+ * @param {ComponentNodeProps} props - Las props del componente.
+ * @returns {React.ReactElement} El elemento del nodo.
  */
 const ComponentNode: React.FC<ComponentNodeProps> = memo(({ id, data, onDeletePort, onPortClick }) => {
 
     /**
-     * Determina el tipo de handle para el puerto (source/target).
+     * Determina si un puerto de comunicación es de origen ('source') o de destino ('target')
+     * para el handle de React Flow.
+     * @param {PortData} port - El puerto a evaluar.
+     * @returns {'source' | 'target' | undefined} El tipo de handle.
      */
     const getHandleType = useCallback((port: PortData) => {
         if (port.type === 'comunicacion' && port.subtype === 'nominal') {
@@ -35,7 +42,6 @@ const ComponentNode: React.FC<ComponentNodeProps> = memo(({ id, data, onDeletePo
         return undefined;
     }, []);
 
-    // Renderizado del nodo y sus puertos
     return (
         <div className="component-node">
             <div className="component-node-header">

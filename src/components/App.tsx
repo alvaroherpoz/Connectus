@@ -1,7 +1,6 @@
 /**
- * App.tsx
- * Componente principal de la aplicación Connectus.
- * Gestiona el estado global, renderiza el diagrama de componentes y coordina la interacción entre nodos, puertos y herramientas.
+ * @fileoverview Componente principal de la aplicación Connectus.
+ * Gestiona el estado global, renderiza el diagrama de componentes y coordina las interacciones.
  */
 
 import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
@@ -17,7 +16,7 @@ import 'reactflow/dist/style.css';
 import { saveAs } from 'file-saver';
 import '../types/App.css';
 
-import type { Node, Edge, Connection, EdgeChange, OnNodesChange, NodeData, PortData, NodeProps, NodeChange, Message, ComponentPriority } from './types';
+import type { Node, Edge, Connection, EdgeChange, OnNodesChange, NodeData, PortData, NodeProps, Message, ComponentPriority } from './types';
 
 import ComponentNode from './ComponentNode';
 import ContextMenu from './ContextMenu';
@@ -28,34 +27,21 @@ import NotificationBar from './NotificationBar';
 import AboutModal from './AboutModal';
 
 /**
- * Estructura para las notificaciones mostradas al usuario.
+ * Define la estructura para las notificaciones mostradas al usuario.
  */
 type Notification = {
   message: string;
   type: 'success' | 'error' | 'info';
 };
 
-/**
- * Nodos iniciales del diagrama.
- */
-const initialNodes: Node<NodeData>[] = [
-  { id: '1', type: 'componentNode', data: { name: 'Component', ports: [], node: 'Node', componentId: 1, maxMessages: 13, priority: 'EDROOMprioHigh', stackSize: 8192, isTop: true }, position: { x: 250, y: 50 }, selectable: true, style: { zIndex: 1 } }
-];
-
-/**
- * Conexiones iniciales del diagrama.
- */
 const initialEdges: Edge[] = [];
 
 /**
  * Componente principal que gestiona el diagrama y la interacción global.
  */
 const App: React.FC = () => {
-  // Estado principal de nodos, conexiones y utilidades de la interfaz
-  const [nodes, setNodes] = useState<Node<NodeData>[]>(initialNodes);
+  const [nodes, setNodes] = useState<Node<NodeData>[]>([]);
   const [edges, setEdges] = useState<Edge[]>(initialEdges);
-  // Se inicializa el contador de IDs para los nuevos nodos, asegurando que sean números.
-  const nodeIdCounter = useRef(4);
   const [menu, setMenu] = useState<{ x: number; y: number; nodeId: string; } | null>(null);
   const [nodeColors, setNodeColors] = useState<Record<string, string>>({
     'NodeA': '#e0f7fa',
@@ -71,9 +57,11 @@ const App: React.FC = () => {
 
   const { getNodes, getEdges } = useReactFlow();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const edgeUpdateSuccessful = useRef(true);
 
   /**
-   * Muestra notificaciones temporales en la barra de estado.
+   * Gestiona la visibilidad de las notificaciones, ocultándolas después de 3 segundos.
+   * @effect
    */
   useEffect(() => {
     if (notification) {
@@ -85,11 +73,21 @@ const App: React.FC = () => {
   }, [notification]);
 
   /**
-   * Añade un nuevo componente al diagrama.
+   * Añade un nuevo componente al lienzo.
+   * Genera un ID único para el componente y el nodo, y lo añade al estado.
+   * Asigna un color aleatorio para la visualización del nodo lógico.
    */
   const onAddNode = useCallback(() => {
-    // Genera un ID numérico y lo convierte a string, como requiere ReactFlow.
-    const newId = nodeIdCounter.current.toString();
+    // Busca el primer ID de nodo (React Flow) disponible, llenando huecos.
+    const existingNodeIds = nodes.map(node => parseInt(node.id, 10)).filter(id => !isNaN(id)).sort((a, b) => a - b);
+    let newNodeIdNum = 1;
+    for (const id of existingNodeIds) {
+        if (id > newNodeIdNum) {
+            break;
+        }
+        newNodeIdNum++;
+    }
+    const newId = newNodeIdNum.toString();
     const existingComponentIds = nodes.map(node => node.data.componentId).sort((a, b) => a - b);
     let newComponentId = 1;
     for (let i = 0; i < existingComponentIds.length; i++) {
@@ -122,22 +120,24 @@ const App: React.FC = () => {
     };
 
     setNodes((nds) => nds.concat(newNode));
-    nodeIdCounter.current++;
     setNotification({ message: `Componente "${newNode.data.name}" añadido con éxito.`, type: 'success' });
   }, [setNodes, nodes]);
 
   /**
-   * Actualiza los nodos cuando hay cambios en el diagrama.
+   * Callback para manejar los cambios en los nodos (movimiento, selección).
+   * Cierra el menú contextual si está abierto.
+   * @param {NodeChange[]} changes - Array de cambios aplicados a los nodos.
    */
   const onNodesChange: OnNodesChange = useCallback(
-    (changes: NodeChange[]) => {
+    (changes) => {
       setNodes((nds) => applyNodeChanges(changes, nds));
-      if (menu) setMenu(null);
-    }, [setNodes, menu]
+      setMenu(null);
+    }, [setNodes]
   );
 
   /**
-   * Actualiza las conexiones (edges) cuando hay cambios en el diagrama.
+   * Callback para manejar los cambios en las conexiones (edges).
+   * @param {EdgeChange[]} changes - Array de cambios aplicados a las conexiones.
    */
   const onEdgesChange = useCallback(
     (changes: EdgeChange[]) => setEdges((eds) => applyEdgeChanges(changes, eds)),
@@ -145,19 +145,21 @@ const App: React.FC = () => {
   );
 
   /**
-   * Gestiona la conexión entre puertos de nodos, validando tipos y nombres.
+   * Callback que se ejecuta al intentar conectar dos puertos.
+   * Valida que la conexión sea lógica (comunicación, nominal a conjugado, mismo protocolo).
+   * @param {Connection} connection - El objeto de conexión propuesto.
    */
   const onConnect = useCallback(
-    (params: Connection) => {
-      const sourceNode = nodes.find(n => n.id === params.source);
-      const targetNode = nodes.find(n => n.id === params.target);
+    (connection: Connection) => {
+      const sourceNode = getNodes().find(n => n.id === connection.source);
+      const targetNode = getNodes().find(n => n.id === connection.target);
 
       if (!sourceNode || !targetNode || !sourceNode.data || !targetNode.data) {
           return;
       }
 
-      const sourcePort = sourceNode.data.ports.find(p => p.id === params.sourceHandle);
-      const targetPort = targetNode.data.ports.find(p => p.id === params.targetHandle);
+      const sourcePort = sourceNode.data.ports.find((p: PortData) => p.id === connection.sourceHandle);
+      const targetPort = targetNode.data.ports.find((p: PortData) => p.id === connection.targetHandle);
 
       const isCommunicationPort = sourcePort?.type === 'comunicacion' && targetPort?.type === 'comunicacion';
 
@@ -169,32 +171,65 @@ const App: React.FC = () => {
       const isNominalToConjugado = sourcePort?.subtype === 'nominal' && targetPort?.subtype === 'conjugado';
       const areProtocolNamesMatching = sourcePort?.protocolName === targetPort?.protocolName;
 
-      // Se eliminó la validación areDataTypesMatching para simplificar la lógica de conexión.
-      // La validación de tipos de mensajes ahora se realiza en el PortInfoPanel.
-      
       if (!areProtocolNamesMatching) {
         setNotification({ message: 'Error: Los puertos solo se pueden conectar si tienen el mismo nombre de protocolo.', type: 'error' });
         return;
       }
 
       if (isNominalToConjugado && areProtocolNamesMatching) {
-        setEdges((eds) => addEdge(params, eds));
+        setEdges((eds) => addEdge(connection, eds));
         setNotification({ message: 'Conexión exitosa.', type: 'success' });
       } else if (!isNominalToConjugado) {
         setNotification({ message: 'Error: Un puerto de comunicación Nominal (salida) solo se puede conectar a un puerto de comunicación Conjugado (entrada).', type: 'error' });
       }
-    }, [setEdges, nodes, setNotification]
+    }, [getNodes, setEdges, setNotification]
   );
 
   /**
-   * Elimina conexiones seleccionadas.
+   * Callback que se ejecuta al eliminar conexiones.
+   * @param {Edge[]} edgesToDelete - Array de conexiones a eliminar.
    */
   const onEdgesDelete = useCallback((edgesToDelete: Edge[]) => {
     setEdges((eds) => eds.filter(edge => !edgesToDelete.includes(edge)));
   }, [setEdges]);
 
   /**
-   * Muestra el menú contextual al hacer clic derecho sobre un nodo.
+   * Se invoca al iniciar la actualización de una conexión (arrastrar un handle).
+   * Marca la actualización como no exitosa inicialmente.
+   */
+  const onEdgeUpdateStart = useCallback(() => {
+    edgeUpdateSuccessful.current = false;
+  }, []);
+
+  /**
+   * Se invoca cuando una conexión se actualiza a un nuevo handle válido.
+   * Marca la actualización como exitosa y actualiza la conexión en el estado.
+   * @param {Edge} oldEdge - La conexión antigua.
+   * @param {Connection} newConnection - La nueva conexión propuesta.
+   */
+  const onEdgeUpdate = useCallback((oldEdge: Edge, newConnection: Connection) => {
+    edgeUpdateSuccessful.current = true;
+    setEdges((els) => addEdge(newConnection, els.filter((edge) => edge.id !== oldEdge.id)));
+  }, [setEdges]);
+
+  /**
+   * Se invoca al soltar el handle de una conexión. Si no fue una actualización
+   * exitosa (por ejemplo, un simple clic), se elimina la conexión.
+   * @param {MouseEvent | TouchEvent} _ - El evento del ratón o táctil.
+   * @param {Edge} edge - La conexión que se estaba actualizando.
+   */
+  const onEdgeUpdateEnd = useCallback((_: MouseEvent | TouchEvent, edge: Edge) => {
+    if (!edgeUpdateSuccessful.current) {
+      setEdges((eds) => eds.filter((e) => e.id !== edge.id));
+      setNotification({ message: 'Conexión eliminada.', type: 'success' });
+    }
+    edgeUpdateSuccessful.current = true;
+  }, [setEdges, setNotification]);
+
+  /**
+   * Muestra el menú contextual en la posición del clic derecho sobre un nodo.
+   * @param {React.MouseEvent} event - El evento del ratón.
+   * @param {Node} node - El nodo sobre el que se hizo clic.
    */
   const onNodeContextMenu = useCallback((event: React.MouseEvent, node: Node) => {
     event.preventDefault();
@@ -202,12 +237,18 @@ const App: React.FC = () => {
   }, []);
 
   /**
-   * Añade un puerto a un nodo específico.
-   * Se ha modificado para devolver un booleano (true=éxito, false=error).
+   * Añade un nuevo puerto a un nodo específico.
+   * @param {string} nodeId - ID del nodo al que se añadirá el puerto.
+   * @param {string} name - Nombre del nuevo puerto.
+   * @param {string} portId - ID numérico del nuevo puerto.
+   * @param {'comunicacion' | 'tiempo' | 'interrupcion'} type - Tipo del puerto.
+   * @param {'nominal' | 'conjugado' | undefined} subtype - Subtipo para puertos de comunicación.
+   * @param {string} [protocolName] - Nombre del protocolo para puertos de comunicación.
+   * @param {Message[]} [messages] - Mensajes asociados para puertos de comunicación.
+   * @returns {boolean} `true` si el puerto se añadió con éxito, `false` en caso de error.
    */
   const handleAddPort = useCallback(
-    (nodeId: string, name: string, portId: string, type: 'comunicacion' | 'tiempo' | 'interrupcion', subtype: 'nominal' | 'conjugado' | undefined, protocolName?: string, messages?: Message[], interruptHandler?: string): boolean => {
-      // Validación: El ID del puerto debe ser solo números
+    (nodeId: string, name: string, portId: string, type: 'comunicacion' | 'tiempo' | 'interrupcion', subtype: 'nominal' | 'conjugado' | undefined, protocolName?: string, messages?: Message[]): boolean => {
       if (!/^\d+$/.test(portId)) {
         setNotification({ message: 'Error: El ID del puerto debe contener solo números.', type: 'error' });
         return false;
@@ -223,7 +264,6 @@ const App: React.FC = () => {
               subtype,
               protocolName,
               messages,
-              interruptHandler,
             };
             return {
               ...node,
@@ -243,7 +283,8 @@ const App: React.FC = () => {
   );
 
   /**
-   * Elimina un nodo y sus conexiones.
+   * Elimina un nodo del lienzo y todas las conexiones asociadas a él.
+   * @param {string} nodeId - El ID del nodo a eliminar.
    */
   const handleDeleteNode = useCallback((nodeId: string) => {
     setNodes((nds) => nds.filter((node) => node.id !== nodeId));
@@ -253,7 +294,11 @@ const App: React.FC = () => {
   }, [setNodes, setEdges, setNotification]);
 
   /**
-   * Actualiza los atributos de un nodo, validando duplicados.
+   * Actualiza los atributos de un nodo específico.
+   * Valida que el ID y el nombre del componente no estén duplicados.
+   * @param {string} nodeId - El ID del nodo a actualizar.
+   * @param {Partial<NodeData>} data - Un objeto con los datos del nodo a actualizar.
+   * @returns {boolean} `true` si la actualización fue exitosa, `false` si hubo un error de validación.
    */
   const handleUpdateNodeAttributes = useCallback((nodeId: string, data: Partial<NodeData>): boolean => {
     const newComponentId = data.componentId;
@@ -327,7 +372,10 @@ const App: React.FC = () => {
   }, [setNodes, nodes, setNotification, nodeColors]);
   
   /**
-   * Marca un nodo como 'top' y desmarca los demás.
+   * Marca un nodo como el componente 'top' del sistema.
+   * Solo puede haber un componente 'top' a la vez.
+   * @param {string} nodeId - El ID del nodo a marcar como 'top'.
+   * @param {boolean} isTop - El nuevo estado 'top'.
    */
   const handleUpdateIsTop = useCallback((nodeId: string, isTop: boolean) => {
     setNodes(nds =>
@@ -342,8 +390,11 @@ const App: React.FC = () => {
   }, [setNodes]);
 
   /**
-   * Añade un puerto conjugado a partir de un puerto nominal.
-   * CORRECCIÓN: Se usa un ID compuesto para el puerto nominal para evitar ambigüedades.
+   * Añade un puerto conjugado a un nodo, basándose en un puerto nominal existente.
+   * @param {string} targetNodeId - El ID del nodo donde se creará el puerto conjugado.
+   * @param {string} compositeNominalPortId - ID compuesto del puerto nominal de origen (`nodeId:portId`).
+   * @param {string} newConjugatePortId - El ID para el nuevo puerto conjugado.
+   * @param {string} newConjugatePortName - El nombre para el nuevo puerto conjugado.
    */
   const handleAddConjugatePort = useCallback((targetNodeId: string, compositeNominalPortId: string, newConjugatePortId: string, newConjugatePortName: string) => {
     const [sourceNodeId, sourcePortId] = compositeNominalPortId.split(':');
@@ -361,19 +412,17 @@ const App: React.FC = () => {
       return;
     }
     
-    // Se crea el nuevo puerto conjugado con el ID y nombre proporcionados por el usuario
     const newPort: PortData = {
       id: newConjugatePortId,
       name: newConjugatePortName,
       type: 'comunicacion',
       subtype: 'conjugado',
       protocolName: nominalPort.protocolName,
-      messages: nominalPort.messages?.map(msg => ({ ...msg })), // Las direcciones ya no se invierten
+      messages: nominalPort.messages?.map(msg => ({ ...msg })),
     };
 
     setNodes(nds => nds.map(node => {
       if (node.id === targetNodeId) {
-        // La validación principal se hace en ContextMenu, pero esto sirve como salvaguarda.
         const portExists = node.data.ports.some(p => p.id === newPort.id);
         if (portExists) {
           setNotification({ message: `Error: Ya existe un puerto con el ID "${newPort.id}" en el componente.`, type: 'error' });
@@ -395,7 +444,9 @@ const App: React.FC = () => {
 
 
   /**
-   * Elimina un puerto y sus conexiones asociadas.
+   * Elimina un puerto de un nodo y sus conexiones asociadas.
+   * @param {string} nodeId - El ID del nodo del que se eliminará el puerto.
+   * @param {string} portId - El ID del puerto a eliminar.
    */
    const handleDeletePort = useCallback((nodeId: string, portId: string) => {
     const currentNodes = getNodes();
@@ -406,7 +457,6 @@ const App: React.FC = () => {
 
     if (!portToDelete) return;
 
-    // Caso 1: Borrar un puerto nominal conectado. Deberíamos borrar también su conjugado.
     if (portToDelete.type === 'comunicacion' && portToDelete.subtype === 'nominal') {
         const connection = currentEdges.find((edge) => edge.source === nodeId && edge.sourceHandle === portId);
 
@@ -417,14 +467,13 @@ const App: React.FC = () => {
             const conjugateNodeId = connection.target;
             const conjugatePortId = connection.targetHandle;
 
-            // Realizar el borrado en cascada
             setNodes((nds) =>
                 nds.map((n) => {
                     let ports = n.data.ports;
-                    if (n.id === nodeId) { // Borrar el puerto nominal
+                    if (n.id === nodeId) {
                         ports = ports.filter((p) => p.id !== portId);
                     }
-                    if (n.id === conjugateNodeId) { // Borrar el puerto conjugado
+                    if (n.id === conjugateNodeId) {
                         ports = ports.filter((p) => p.id !== conjugatePortId);
                     }
                     return { ...n, data: { ...n.data, ports: ports } };
@@ -437,7 +486,6 @@ const App: React.FC = () => {
         }
     }
 
-    // Caso 2: Comportamiento por defecto para otros puertos (o nominales no conectados)
     const otherEdgesToDelete = currentEdges.filter(
         (edge) => (edge.source === nodeId && edge.sourceHandle === portId) || (edge.target === nodeId && edge.targetHandle === portId)
     );
@@ -458,31 +506,32 @@ const App: React.FC = () => {
   }, [getNodes, getEdges, setNodes, setEdges, setNotification, setSelectedPort]);
 
   /**
-   * Selecciona un puerto para mostrar su información.
+   * Gestiona el clic en un puerto, abriendo o cerrando su panel de información.
+   * @param {PortData} portData - Los datos del puerto seleccionado.
+   * @param {string} nodeId - El ID del nodo al que pertenece el puerto.
    */
   const handlePortClick = useCallback((portData: PortData, nodeId: string) => {
     setSelectedPort(currentSelected => {
-        // Si el panel del mismo puerto (mismo ID y mismo nodo) ya está abierto, lo cierra.
         if (currentSelected && currentSelected.port.id === portData.id && currentSelected.nodeId === nodeId) {
             return null;
         }
-        // Si no, abre el panel para el puerto clicado.
         return { port: portData, nodeId };
     });
   }, [setSelectedPort]);
 
   /**
-   * Actualiza la lista de mensajes de un puerto.
+   * Actualiza la lista de mensajes de un puerto y sincroniza con el puerto conectado si existe.
+   * @param {string} nodeId - ID del nodo del puerto a actualizar.
+   * @param {string} portId - ID del puerto a actualizar.
+   * @param {Message[]} newMessages - La nueva lista de mensajes.
    */
   const handleUpdatePortMessages = useCallback((nodeId: string, portId: string, newMessages: Message[]) => {
     setNodes(prevNodes => {
-      // Buscar la conexión del puerto que se está editando
       const connection = edges.find(edge => 
         (edge.source === nodeId && edge.sourceHandle === portId) || 
         (edge.target === nodeId && edge.targetHandle === portId)
       );
 
-      // Si no hay conexión, solo se actualiza el puerto actual
       if (!connection) {
         return prevNodes.map(node => {
           if (node.id === nodeId) {
@@ -498,17 +547,13 @@ const App: React.FC = () => {
         });
       }
 
-      // Si hay conexión, se sincronizan ambos puertos
       const isSource = connection.source === nodeId;
       const connectedNodeId = isSource ? connection.target : connection.source;
       const connectedPortId = isSource ? connection.targetHandle : connection.sourceHandle;
 
-      // Los mensajes del puerto conectado se sincronizan para ser idénticos.
       const syncedMessages: Message[] = newMessages.map(msg => ({ ...msg }));
 
-      // Actualizar ambos puertos en el estado de los nodos
       return prevNodes.map(node => {
-        // Actualizar el puerto principal
         if (node.id === nodeId) {
           return {
             ...node,
@@ -518,7 +563,6 @@ const App: React.FC = () => {
             },
           };
         }
-        // Actualizar el puerto conectado
         if (node.id === connectedNodeId) {
           return {
             ...node,
@@ -536,16 +580,19 @@ const App: React.FC = () => {
   }, [setNodes, edges, setNotification]);
   
   /**
-   * Actualiza el ID y el nombre de un puerto.
+   * Actualiza el ID y el nombre de un puerto, validando duplicados y actualizando conexiones.
+   * @param {string} nodeId - ID del nodo del puerto.
+   * @param {string} oldPortId - ID antiguo del puerto.
+   * @param {string} newPortId - Nuevo ID para el puerto.
+   * @param {string} newPortName - Nuevo nombre para el puerto.
+   * @returns {boolean} `true` si la actualización fue exitosa, `false` si hubo un error.
    */
   const handleUpdatePortId = useCallback((nodeId: string, oldPortId: string, newPortId: string, newPortName: string): boolean => {
-    // Validación: El ID del puerto debe ser solo números
     if (!/^\d+$/.test(newPortId)) {
       setNotification({ message: 'Error: El ID del puerto debe contener solo números.', type: 'error' });
       return false;
     }
     
-    // Validar si el nuevo ID ya existe en el mismo nodo
     const isDuplicateId = nodes.some(node =>
         node.id === nodeId && node.data.ports.some(p => p.id === newPortId && p.id !== oldPortId)
     );
@@ -554,7 +601,6 @@ const App: React.FC = () => {
         return false;
     }
 
-    // Validar si el nuevo nombre ya existe en el mismo nodo
     const isDuplicateName = nodes.some(node =>
         node.id === nodeId && node.data.ports.some(p => p.name === newPortName && p.id !== oldPortId)
     );
@@ -563,19 +609,15 @@ const App: React.FC = () => {
         return false;
     }
 
-    // Actualizar los nodos
     setNodes(prevNodes => {
       let updatedNodes = [...prevNodes];
 
-      // Buscar la conexión antes de realizar cambios
       const connection = edges.find(edge => 
         (edge.source === nodeId && edge.sourceHandle === oldPortId) || 
         (edge.target === nodeId && edge.targetHandle === oldPortId)
       );
 
-      // Actualizar todos los nodos relevantes
       updatedNodes = updatedNodes.map(node => {
-        // Actualizar el puerto principal
         if (node.id === nodeId) {
           const updatedPorts = node.data.ports.map(p => 
             p.id === oldPortId ? { ...p, id: newPortId, name: newPortName } : p
@@ -583,7 +625,6 @@ const App: React.FC = () => {
           return { ...node, data: { ...node.data, ports: updatedPorts } };
         }
 
-        // Actualizar el nombre del puerto conectado
         if (connection && node.id === (connection.source === nodeId ? connection.target : connection.source)) {
           const connectedPortId = connection.source === nodeId ? connection.targetHandle : connection.sourceHandle;
           const updatedPorts = node.data.ports.map(p => 
@@ -598,7 +639,6 @@ const App: React.FC = () => {
       return updatedNodes;
     });
 
-    // Actualizar las conexiones si el ID del puerto ha cambiado
     if (oldPortId !== newPortId) {
       setEdges(prevEdges => prevEdges.map(edge => {
           if (edge.source === nodeId && edge.sourceHandle === oldPortId) {
@@ -616,7 +656,9 @@ const App: React.FC = () => {
 
 
   /**
-   * Define los tipos de nodos para ReactFlow.
+   * Memoiza los tipos de nodos personalizados para ReactFlow,
+   * pasando las funciones de callback necesarias al `ComponentNode`.
+   * @returns {object} Un objeto con los tipos de nodos personalizados.
    */
   const nodeTypes = useMemo(() => ({
     componentNode: (props: NodeProps<NodeData>) => (
@@ -629,7 +671,7 @@ const App: React.FC = () => {
   }), [handleDeletePort, handlePortClick]);
 
   /**
-   * Genera el código fuente y lo descarga como ZIP.
+   * Inicia la generación del código fuente y su descarga como un archivo ZIP.
    */
   const handleGenerateCode = useCallback(() => {
     CodeGenerator.generateCodeAndDownload(nodes, edges);
@@ -638,19 +680,20 @@ const App: React.FC = () => {
   }, [nodes, edges, setNotification]);
 
   /**
-   * Descarga el diagrama actual en formato JSON.
+   * Guarda el estado actual del diagrama (nodos y conexiones) en un archivo JSON.
    */
   const handleDownload = useCallback(() => {
-    const data = JSON.stringify({ nodes: getNodes(), edges: getEdges() }, null, 2);
+    const data = JSON.stringify({ nodes: nodes, edges: edges }, null, 2);
     const blob = new Blob([data], { type: 'application/json' });
     const fileName = downloadFileName.trim() || 'edroom_diagrama';
     saveAs(blob, `${fileName}.json`);
     setNotification({ message: `Diagrama '${fileName}' descargado con éxito.`, type: 'success' });
     setShowToolsMenu(false);
-  }, [getNodes, getEdges, downloadFileName, setNotification]);
+  }, [nodes, edges, downloadFileName, setNotification]);
 
   /**
-   * Carga un diagrama desde un archivo JSON.
+   * Carga un diagrama desde un archivo JSON seleccionado por el usuario.
+   * @param {React.ChangeEvent<HTMLInputElement>} event - El evento del input de archivo.
    */
   const handleLoad = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -710,14 +753,15 @@ const App: React.FC = () => {
   }, [setNotification]);
 
   /**
-   * Abre el selector de archivos para cargar un diagrama.
+   * Simula un clic en el input de archivo oculto para abrir el diálogo de carga.
    */
   const handleLoadButtonClick = useCallback(() => {
     fileInputRef.current?.click();
   }, []);
 
   /**
-   * Añade un nuevo tipo de dato personalizado.
+   * Añade un nuevo tipo de dato a la lista de tipos de datos personalizados.
+   * @param {string} newType - El nuevo tipo de dato a añadir.
    */
   const handleAddDataType = useCallback((newType: string) => {
     setDataTypes(prevTypes => {
@@ -728,7 +772,6 @@ const App: React.FC = () => {
     });
   }, []);
 
-  // Renderizado principal de la aplicación y sus paneles
   return (
     <div className="app-container">
       <div className="toolbar">
@@ -774,6 +817,9 @@ const App: React.FC = () => {
         onConnect={onConnect}
         onNodeContextMenu={onNodeContextMenu}
         onEdgesDelete={onEdgesDelete}
+        onEdgeUpdate={onEdgeUpdate}
+        onEdgeUpdateStart={onEdgeUpdateStart}
+        onEdgeUpdateEnd={onEdgeUpdateEnd}
         fitView
         nodeTypes={nodeTypes}
       >
@@ -785,9 +831,7 @@ const App: React.FC = () => {
         <ContextMenu
           x={menu.x}
           y={menu.y}
-          // Pasa la función de añadir puerto que ahora devuelve un booleano
           onAddPort={handleAddPort}
-          // Pasa la función para añadir puerto conjugado
           onAddConjugatePort={handleAddConjugatePort}
           onClose={() => setMenu(null)}
           onDeleteNode={handleDeleteNode}
@@ -811,7 +855,7 @@ const App: React.FC = () => {
           nodeId={selectedPort.nodeId}
           onClose={() => setSelectedPort(null)}
           onUpdatePortMessages={handleUpdatePortMessages}
-          onUpdatePortId={handleUpdatePortId} // Se agregó la nueva prop
+          onUpdatePortId={handleUpdatePortId}
           dataTypes={dataTypes}
           setNotification={setNotification}
           handleAddDataType={handleAddDataType}

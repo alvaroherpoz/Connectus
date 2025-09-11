@@ -1,7 +1,5 @@
 /**
- * ComponentAttributesPanel.tsx
- * Panel para editar los atributos de un componente seleccionado en el diagrama.
- * Permite modificar propiedades como ID, nombre, nodo, prioridad, stack y si es el componente top.
+ * @fileoverview Panel para editar los atributos de un componente seleccionado.
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
@@ -9,18 +7,26 @@ import type { NodeData, ComponentPriority } from './types';
 import '../types/ComponentAttributesPanel.css';
 
 /**
- * Props del panel de atributos del componente.
+ * Props para el componente ComponentAttributesPanel.
+ * @interface ComponentAttributesPanelProps
  */
 interface ComponentAttributesPanelProps {
+  /** ID del nodo a editar. */
   nodeId: string;
+  /** Datos actuales del nodo. */
   nodeData: NodeData;
+  /** Función para cerrar el panel. */
   onClose: () => void;
+  /** Función para actualizar los datos del nodo. */
   onUpdateNode: (nodeId: string, data: Partial<NodeData>) => boolean;
+  /** Función para actualizar el estado 'top' del nodo. */
   onUpdateIsTop: (nodeId: string, isTop: boolean) => void;
 }
 
 /**
- * Panel para editar los atributos de un componente.
+ * Componente que renderiza un panel flotante y arrastrable para editar los atributos de un componente.
+ * @param {ComponentAttributesPanelProps} props - Las props del componente.
+ * @returns {React.ReactElement} El panel de atributos.
  */
 const ComponentAttributesPanel: React.FC<ComponentAttributesPanelProps> = ({
   nodeId,
@@ -37,7 +43,8 @@ const ComponentAttributesPanel: React.FC<ComponentAttributesPanelProps> = ({
   const [position, setPosition] = useState({ x: 0, y: 0 });
 
   /**
-   * Centra el panel en pantalla al montarse.
+   * Centra el panel en la pantalla la primera vez que se renderiza.
+   * @effect
    */
   useEffect(() => {
     if (panelRef.current) {
@@ -49,7 +56,8 @@ const ComponentAttributesPanel: React.FC<ComponentAttributesPanelProps> = ({
   }, []);
 
   /**
-   * Inicia el arrastre del panel.
+   * Inicia el arrastre del panel al hacer clic en la cabecera.
+   * @param {React.MouseEvent} e - El evento del ratón.
    */
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     setIsDragging(true);
@@ -57,7 +65,8 @@ const ComponentAttributesPanel: React.FC<ComponentAttributesPanelProps> = ({
   }, []);
 
   /**
-   * Gestiona el movimiento del panel mientras se arrastra.
+   * Actualiza la posición del panel mientras se arrastra.
+   * @param {MouseEvent} e - El evento del ratón.
    */
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (isDragging) {
@@ -74,14 +83,16 @@ const ComponentAttributesPanel: React.FC<ComponentAttributesPanelProps> = ({
   }, [isDragging, dragStart]);
 
   /**
-   * Finaliza el arrastre del panel.
+   * Finaliza la operación de arrastre del panel.
    */
   const handleMouseUp = useCallback(() => {
     setIsDragging(false);
   }, []);
 
   /**
-   * Añade y elimina listeners de arrastre según el estado.
+   * Añade y elimina los listeners de eventos para el arrastre del panel
+   * en función de si se está arrastrando o no.
+   * @effect
    */
   useEffect(() => {
     if (isDragging) {
@@ -98,7 +109,7 @@ const ComponentAttributesPanel: React.FC<ComponentAttributesPanelProps> = ({
   }, [isDragging, handleMouseMove, handleMouseUp]);
 
   /**
-   * Guarda los cambios realizados en el panel.
+   * Llama a la función de actualización del nodo padre y cierra el panel si tiene éxito.
    */
   const handleSave = () => {
     const success = onUpdateNode(nodeId, localData);
@@ -108,7 +119,9 @@ const ComponentAttributesPanel: React.FC<ComponentAttributesPanelProps> = ({
   };
   
   /**
-   * Cambia el estado de "top component".
+   * Maneja el cambio del checkbox "Top Component", actualizando el estado local
+   * y llamando a la función de actualización del componente padre.
+   * @param {React.ChangeEvent<HTMLInputElement>} e - El evento de cambio.
    */
   const handleIsTopChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const isChecked = e.target.checked;
@@ -116,7 +129,6 @@ const ComponentAttributesPanel: React.FC<ComponentAttributesPanelProps> = ({
     onUpdateIsTop(nodeId, isChecked);
   };
 
-  // Renderizado del panel de atributos
   return (
     <div
       ref={panelRef}

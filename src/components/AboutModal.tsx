@@ -1,6 +1,5 @@
 /**
- * AboutModal.tsx
- * Modal informativo sobre la aplicación Connectus.
+ * @fileoverview Modal informativo sobre la aplicación Connectus.
  * Muestra información del desarrollador y el propósito de la herramienta.
  */
 
@@ -8,14 +7,18 @@ import React from 'react';
 import '../types/AboutModal.css';
 
 /**
- * Props del modal informativo.
+ * Props para el componente AboutModal.
+ * @interface AboutModalProps
  */
 interface AboutModalProps {
+    /** Función para cerrar el modal. */
     onClose: () => void;
 }
 
 /**
- * Componente modal para mostrar información sobre la aplicación.
+ * Componente que renderiza un modal con información sobre la aplicación.
+ * @param {AboutModalProps} props - Las props del componente.
+ * @returns {React.ReactElement} El modal informativo.
  */
 const AboutModal: React.FC<AboutModalProps> = ({ onClose }) => {
     return (

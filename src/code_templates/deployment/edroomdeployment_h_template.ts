@@ -1,24 +1,21 @@
 /**
- * edroomdeployment_h_template.ts
- * Plantilla para generar el archivo header (.h) de despliegue EDROOM.
- * Genera las declaraciones, estructuras y funciones necesarias para la inicialización y conexión de componentes.
+ * @fileoverview Plantilla para generar el archivo header (.h) de despliegue EDROOM.
+ * Contiene las declaraciones, estructuras y funciones para la inicialización y conexión de componentes.
  */
 import type { Node, NodeData, Edge } from '../../components/types';
 
 /**
- * Clase que encapsula la generación del archivo header de despliegue EDROOM.
+ * Genera el contenido del archivo `edroomdeployment.h`.
  */
 export class edroomdeployment_h_template {
     /**
-     * Genera el contenido del archivo header para el despliegue de un nodo lógico.
-     * @param nodes - Nodos del diagrama.
-     * @param localNodeName - Nombre del nodo local.
-     * @param edges - Conexiones entre nodos.
-     * @returns Código fuente .h generado.
+     * Genera el contenido del archivo header para el despliegue de un nodo lógico específico.
+     * @param {Node<NodeData>[]} nodes - Todos los nodos del diagrama.
+     * @param {string} localNodeName - El nombre del nodo lógico para el que se genera el código.
+     * @param {Edge[]} edges - Todas las conexiones del diagrama.
+     * @returns {string} El contenido del archivo .h.
      */
     public static generateHeaderFileContent(nodes: Node<NodeData>[], localNodeName: string, edges: Edge[]): string {
-        // Genera el contenido principal del archivo .h de despliegue.
-        // Filtra los nodos y conexiones que pertenecen al nodo local
         const allConnections = edges.filter(e => {
             const sourceNode = nodes.find(n => n.id === e.source);
             const targetNode = nodes.find(n => n.id === e.target);
@@ -318,15 +315,14 @@ ${getMemoryFunctions}
 `;
     }
     
-    // --- Funciones auxiliares para la lógica de la plantilla ---
-    
     /**
      * Calcula el número máximo de nodos de cola para un componente.
-     * @param node - El nodo del componente.
-     * @returns El número de nodos de cola.
+     * El cálculo es: `maxMessages` del componente + puertos con `invoke` de entrada + puertos de `tiempo`.
+     * @param {Node<NodeData>} node - El nodo del componente.
+     * @returns {number} El número de nodos de cola.
      */
     private static calculateMaxQueueNodes(node: Node<NodeData>): number {
-        let asyncMessagesCount = 0;
+        const asyncMessagesCount = node.data.maxMessages;
         let invokePortsCount = 0;
         let timerPortsCount = 0;
 
@@ -338,15 +334,9 @@ ${getMemoryFunctions}
             if (port.type === 'comunicacion' && port.messages) {
                 let hasEffectiveInvokeEntrada = false;
                 port.messages.forEach(message => {
-                    if (message.type === 'async') {
-                        asyncMessagesCount++;
-                    }
                     if (message.type === 'invoke') {
                         const isEntrada = message.direction === 'entrada';
                         const isConjugado = port.subtype === 'conjugado';
-                        // La dirección efectiva de entrada es:
-                        // - 'entrada' en un puerto nominal
-                        // - 'salida' en un puerto conjugado (porque es la perspectiva del componente)
                         if ((isEntrada && !isConjugado) || (!isEntrada && isConjugado)) {
                             hasEffectiveInvokeEntrada = true;
                         }
@@ -357,15 +347,14 @@ ${getMemoryFunctions}
                 }
             }
         });
-        // El cálculo es: num_mensajes_async + num_puertos_con_invoke_entrada + num_puertos_tiempo
         return asyncMessagesCount + invokePortsCount + timerPortsCount;
     }
     
     /**
-     * Obtiene el nombre de instancia para un nodo dado.
-     * @param node - Nodo del diagrama.
-     * @param localNodeName - Nombre del nodo local.
-     * @returns Nombre de instancia.
+     * Obtiene el nombre de la instancia de un componente.
+     * @param {Node<NodeData>} node - El nodo del componente.
+     * @param {string} localNodeName - El nombre del nodo lógico actual.
+     * @returns {string} El nombre de la instancia (p. ej., `rcomponente` o `componente`).
      */
     private static getInstanceName(node: Node<NodeData>, localNodeName: string): string {
         const isRemote = node.data.node !== localNodeName;
@@ -378,10 +367,10 @@ ${getMemoryFunctions}
     }
     
     /**
-     * Obtiene la clase de componente para un nodo.
-     * @param node - Nodo del diagrama.
-     * @param localNodeName - Nombre del nodo local.
-     * @returns Nombre de la clase de componente.
+     * Obtiene el nombre de la clase C++ para un componente.
+     * @param {Node<NodeData>} node - El nodo del componente.
+     * @param {string} localNodeName - El nombre del nodo lógico actual.
+     * @returns {string} El nombre de la clase (p. ej., `RComponente`, `CCComponente`).
      */
     private static getComponentClass(node: Node<NodeData>, localNodeName: string): string {
         const isRemote = node.data.node !== localNodeName;
@@ -393,16 +382,16 @@ ${getMemoryFunctions}
             return componentType;
         } else if (!node.data.isTop && isRemote) {
             return `RCC${componentType}`;
-        } else { // !node.data.isTop && !isRemote
+        } else {
             return `CC${componentType}`;
         }
     }
 
     /**
-     * Obtiene el prefijo de inclusión para un nodo.
-     * @param node - Nodo del diagrama.
-     * @param localNodeName - Nombre del nodo local.
-     * @returns Prefijo para el include.
+     * Obtiene el prefijo para la directiva `#include` de un componente.
+     * @param {Node<NodeData>} node - El nodo del componente.
+     * @param {string} localNodeName - El nombre del nodo lógico actual.
+     * @returns {string} El prefijo del include (p. ej., `r`, `cc`).
      */
     private static getIncludePrefix(node: Node<NodeData>, localNodeName: string): string {
         const isRemote = node.data.node !== localNodeName;
@@ -413,7 +402,7 @@ ${getMemoryFunctions}
             return '';
         } else if (!node.data.isTop && isRemote) {
             return 'rcc';
-        } else { // !node.data.isTop && !isRemote
+        } else {
             return 'cc';
         }
     }
@@ -421,7 +410,11 @@ ${getMemoryFunctions}
     private static portCounter: Record<string, number> = {};
 
     /**
-     * Reinicia el contador de sufijos de puertos.
+     * Obtiene el nombre de un puerto a partir de una conexión.
+     * @param {Node<NodeData>[]} nodes - Todos los nodos del diagrama.
+     * @param {Edge} edge - La conexión.
+     * @param {'source' | 'target'} type - Si se busca el puerto de origen o de destino.
+     * @returns {string} El nombre del puerto sin espacios.
      */
     private static resetPortCounter(): void {
         this.portCounter = {};

@@ -1,4 +1,7 @@
-/* Notificación flotante */
+/*
+ * NotificationBar.css
+ * Estilos para la barra de notificaciones flotante que muestra mensajes de estado.
+ */
 .notification-bar {
     position: fixed;
     top: 20px;

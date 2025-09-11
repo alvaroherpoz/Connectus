@@ -1,25 +1,24 @@
 /**
- * edroomdeployment_cpp_template.ts
- * Plantilla para generar el archivo fuente (.cpp) de despliegue EDROOM.
- * Genera la lógica de inicialización, conexión y traducción de señales entre componentes.
+ * @fileoverview Plantilla para generar el archivo fuente (.cpp) de despliegue EDROOM.
+ * Contiene la lógica para la inicialización, conexión y traducción de señales entre componentes.
  */
 
 import type { Node, NodeData, Edge, PortData } from '../../components/types';
 
 /**
- * Clase que encapsula la generación del archivo .cpp de despliegue EDROOM.
+ * Genera el contenido del archivo `edroomdeployment.cpp`.
  */
 export class edroomdeployment_cpp_template {
     /**
      * Genera el contenido del archivo .cpp para el despliegue de un nodo lógico.
-     * @param nodes - Nodos del diagrama.
-     * @param localNodeName - Nombre del nodo local.
-     * @param edges - Conexiones entre nodos.
-     * @returns Código fuente .cpp generado.
+     * @param {Node<NodeData>[]} nodes - Todos los nodos del diagrama.
+     * @param {string} localNodeName - El nombre del nodo lógico para el que se genera el código.
+     * @param {Edge[]} edges - Todas las conexiones del diagrama.
+     * @returns {string} El contenido del archivo .cpp.
      */
     public static generateCppFileContent(nodes: Node<NodeData>[], localNodeName: string, edges: Edge[]): string {
-        // Genera el contenido principal del archivo .cpp de despliegue.
         const allNodes = nodes;
+        // Un componente es remoto si su propiedad 'node' es diferente a la del nodo local.
         const remoteNodes = nodes.filter(n => n.data.node !== localNodeName);
 
         // 2. Funcion MainWait
@@ -56,29 +55,55 @@ export class edroomdeployment_cpp_template {
         const remoteCommSwitches = remoteNodes.map(remoteCmp => {
             const remoteCmpId = remoteCmp.data.componentId;
 
-            const remoteConnections = edges.filter(e => {
+            const connectionsWithRemote = edges.filter(e => {
                 const sourceNode = nodes.find(n => n.id === e.source);
                 const targetNode = nodes.find(n => n.id === e.target);
-                return (sourceNode?.data.node !== targetNode?.data.node) &&
-                    (sourceNode?.data.componentId === remoteCmpId || targetNode?.data.componentId === remoteCmpId);
+                if (!sourceNode || !targetNode) return false;
+
+                const sourceIsThisRemote = sourceNode.id === remoteCmp.id;
+                const targetIsLocal = targetNode.data.node === localNodeName;
+
+                const targetIsThisRemote = targetNode.id === remoteCmp.id;
+                const sourceIsLocal = sourceNode.data.node === localNodeName;
+
+                return (sourceIsThisRemote && targetIsLocal) || (targetIsThisRemote && sourceIsLocal);
             });
 
-            const interfaceCases = remoteConnections.map(conn => {
-                const sourceNode = nodes.find(n => n.id === conn.source)!;
-                const targetNode = nodes.find(n => n.id === conn.target)!;
-                const localNode = sourceNode.data.node === localNodeName ? sourceNode : targetNode;
-                const remoteNode = sourceNode.data.node !== localNodeName ? sourceNode : targetNode;
+            if (connectionsWithRemote.length === 0) return '';
 
-                const remoteInterfaceId = this.getInterfaceIdFromEdge(remoteNode, conn);
-                const remoteInterfaceName = this.getPortNameFromEdge(nodes, conn, remoteNode === sourceNode ? 'source' : 'target');
+            const connectionsByRemotePort = connectionsWithRemote.reduce((acc, conn) => {
+                const portId = conn.source === remoteCmp.id ? conn.sourceHandle : conn.targetHandle;
+                if (portId) {
+                    (acc[portId] = acc[portId] || []).push(conn);
+                }
+                return acc;
+            }, {} as Record<string, Edge[]>);
+
+            const interfaceCases = Object.entries(connectionsByRemotePort).map(([portId, portConnections]) => {
+                const remotePort = remoteCmp.data.ports.find(p => p.id === portId);
+                if (!remotePort) return '';
+
+                const remotePortName = remotePort.name.replace(/\s/g, '');
+
+                const signalCases = portConnections.map(conn => {
+                    const localCmp = nodes.find(n => n.id === (conn.source === remoteCmp.id ? conn.target : conn.source))!;
+                    return this.generateSignalCases(remoteCmp, localCmp, conn, localNodeName);
+                }).join('\n');
+
+                if (!signalCases.trim()) return '';
 
                 return `
-                        case(${remoteInterfaceId}): // Port: ${remoteInterfaceName}
+                        case(${portId}): // Interface ${remotePortName}
                             switch(msgSignal){
-${this.generateSignalCases(remoteNode, localNode)}
+${signalCases}
+                                default:
+                                    //Error in Remote Msg Reception
+                                break;
                             }
                             break;`;
             }).join('\n');
+
+            if (!interfaceCases.trim()) return '';
 
             return `
             case(${remoteCmpId}): // ${remoteCmp.data.name} sent it
@@ -114,7 +139,6 @@ ${interfaceCases}
             const port_target_name = targetPortName;
 
 
-            // getComponentSignals 
             const sourcePortData = sourceNode.data.ports.filter(p => p.name.replace(/\s/g, '') === port_source_name);
             const targetPortData = targetNode.data.ports.filter(p => p.name.replace(/\s/g, '') === port_target_name);
 
@@ -169,7 +193,8 @@ TEDROOMSignal CEDROOMSystemCommSAP::C${targetNode.data.componentId}${targetName}
             return sourceNode && targetNode && sourceNode.data.node === localNodeName && targetNode.data.node === localNodeName;
         });
 
-        const setLocalConnectionsContent = localConnections.filter(conn => conn.sourceHandle && conn.targetHandle).map((conn, index) => {
+        //const setLocalConnectionsContent = localConnections.filter(conn => conn.sourceHandle && conn.targetHandle).map((conn, index) => {
+        const setLocalConnectionsContent = localConnections.map((conn, index) => {
             const sourceNode = nodes.find(n => n.id === conn.source)!;
             const targetNode = nodes.find(n => n.id === conn.target)!;
             const sourceInstance = this.getInstanceName(sourceNode, localNodeName);
@@ -194,7 +219,7 @@ TEDROOMSignal CEDROOMSystemCommSAP::C${targetNode.data.componentId}${targetName}
         const remoteConnections = edges.filter(conn => {
             const sourceNode = nodes.find(n => n.id === conn.source);
             const targetNode = nodes.find(n => n.id === conn.target);
-            return sourceNode && targetNode && sourceNode.data.node !== targetNode.data.node && !sourceNode.data.isTop && !targetNode.data.isTop;
+            return sourceNode && targetNode && sourceNode.data.node !== targetNode.data.node;
         });
 
         const setRemoteConnectionsContent = remoteConnections.filter(conn => conn.sourceHandle && conn.targetHandle).map((conn, index) => {
@@ -542,14 +567,14 @@ Pr_TaskRV_t CEDROOMSystemDeployment::main_task(Pr_TaskP_t){
 `;
     }
 
-    // --- Funciones auxiliares para la lógica de la plantilla ---
     /**
      * Calcula el número máximo de nodos de cola para un componente.
-     * @param node - El nodo del componente.
-     * @returns El número de nodos de cola.
+     * El cálculo es: `maxMessages` del componente + puertos con `invoke` de entrada + puertos de `tiempo`.
+     * @param {Node<NodeData>} node - El nodo del componente.
+     * @returns {number} El número de nodos de cola.
      */
     private static calculateMaxQueueNodes(node: Node<NodeData>): number {
-        let asyncMessagesCount = 0;
+        const asyncMessagesCount = node.data.maxMessages;
         let invokePortsCount = 0;
         let timerPortsCount = 0;
 
@@ -561,15 +586,9 @@ Pr_TaskRV_t CEDROOMSystemDeployment::main_task(Pr_TaskP_t){
             if (port.type === 'comunicacion' && port.messages) {
                 let hasEffectiveInvokeEntrada = false;
                 port.messages.forEach(message => {
-                    if (message.type === 'async') {
-                        asyncMessagesCount++;
-                    }
                     if (message.type === 'invoke') {
                         const isEntrada = message.direction === 'entrada';
                         const isConjugado = port.subtype === 'conjugado';
-                        // La dirección efectiva de entrada es:
-                        // - 'entrada' en un puerto nominal
-                        // - 'salida' en un puerto conjugado (porque es la perspectiva del componente)
                         if ((isEntrada && !isConjugado) || (!isEntrada && isConjugado)) {
                             hasEffectiveInvokeEntrada = true;
                         }
@@ -580,15 +599,14 @@ Pr_TaskRV_t CEDROOMSystemDeployment::main_task(Pr_TaskP_t){
                 }
             }
         });
-        // El cálculo es: num_mensajes_async + num_puertos_con_invoke_entrada + num_puertos_tiempo
         return asyncMessagesCount + invokePortsCount + timerPortsCount;
     }
 
     /**
-     * Obtiene el nombre de instancia para un nodo dado.
-     * @param node - Nodo del diagrama.
-     * @param localNodeName - Nombre del nodo local.
-     * @returns Nombre de instancia.
+     * Obtiene el nombre de la instancia de un componente.
+     * @param {Node<NodeData>} node - El nodo del componente.
+     * @param {string} localNodeName - El nombre del nodo lógico actual.
+     * @returns {string} El nombre de la instancia (p. ej., `rcomponente` o `componente`).
      */
     private static getInstanceName(node: Node<NodeData>, localNodeName: string): string {
         const isRemote = node.data.node !== localNodeName;
@@ -601,10 +619,10 @@ Pr_TaskRV_t CEDROOMSystemDeployment::main_task(Pr_TaskP_t){
     }
 
     /**
-     * Obtiene la clase de componente para un nodo.
-     * @param node - Nodo del diagrama.
-     * @param localNodeName - Nombre del nodo local.
-     * @returns Nombre de la clase de componente.
+     * Obtiene el nombre de la clase C++ para un componente.
+     * @param {Node<NodeData>} node - El nodo del componente.
+     * @param {string} localNodeName - El nombre del nodo lógico actual.
+     * @returns {string} El nombre de la clase (p. ej., `RComponente`, `CCComponente`).
      */
     private static getComponentClass(node: Node<NodeData>, localNodeName: string): string {
         const isRemote = node.data.node !== localNodeName;
@@ -616,16 +634,17 @@ Pr_TaskRV_t CEDROOMSystemDeployment::main_task(Pr_TaskP_t){
             return componentType;
         } else if (!node.data.isTop && isRemote) {
             return `RCC${componentType}`;
-        } else { // !node.data.isTop && !isRemote
+        } else {
             return `CC${componentType}`;
         }
     }
 
     /**
-     * Obtiene el nombre del puerto desde un edge.
-     * @param edge - Conexión entre nodos.
-     * @param type - Tipo de puerto ('source' o 'target').
-     * @returns Nombre del puerto.
+     * Obtiene el nombre de un puerto a partir de una conexión.
+     * @param {Node<NodeData>[]} nodes - Todos los nodos del diagrama.
+     * @param {Edge} edge - La conexión.
+     * @param {'source' | 'target'} type - Si se busca el puerto de origen o de destino.
+     * @returns {string} El nombre del puerto sin espacios.
      */
     private static getPortNameFromEdge(nodes: Node<NodeData>[], edge: Edge, type: 'source' | 'target'): string {
         const nodeId = type === 'source' ? edge.source : edge.target;
@@ -641,39 +660,29 @@ Pr_TaskRV_t CEDROOMSystemDeployment::main_task(Pr_TaskP_t){
     }
 
     /**
-     * Obtiene el identificador de interfaz para un nodo y edge.
-     * @param node - Nodo del diagrama.
-     * @param edge - Conexión entre nodos.
-     * @returns Identificador de la interfaz.
-     */
-    private static getInterfaceIdFromEdge(node: Node<NodeData>, edge: Edge): string | number {
-        const handle = node.id === edge.source ? edge.sourceHandle : edge.targetHandle;
-        return handle || -1;
-    }
-
-    /**
      * Extrae las señales de los puertos de un componente.
-     * @param ports - Lista de puertos.
-     * @returns Array de señales con información de tipo, nombre y dato.
+     * Determina si una señal es de entrada (IN) o salida (OUT) basándose en la
+     * dirección del mensaje y si el puerto es conjugado.
+     * @param {PortData[]} ports - La lista de puertos a analizar.
+     * @returns {Array} Un array de objetos que representan las señales.
      */
-    private static getComponentSignals(ports: PortData[]): Array<{ name: string; type: 'IN' | 'OUT'; portName: string; dataType: string }> {
-        const signals: Array<{ name: string; type: 'IN' | 'OUT'; portName: string; dataType: string }> = [];
+    private static getComponentSignals(ports: PortData[]): Array<{ name: string; type: 'IN' | 'OUT'; portName: string; dataType: string; messageType: 'invoke' | 'async' | 'reply' }> {
+        const signals: Array<{ name: string; type: 'IN' | 'OUT'; portName: string; dataType: string; messageType: 'invoke' | 'async' | 'reply' }> = [];
         ports.forEach(port => {
             if (port.messages) {
                 port.messages.forEach(message => {
                     let directionType: 'IN' | 'OUT';
                     if (port.subtype === 'conjugado') {
-                        // Para puertos conjugados, la dirección se invierte
                         directionType = message.direction === 'entrada' ? 'OUT' : 'IN';
                     } else {
-                        // Para puertos nominales (o sin subtipo), la dirección es directa
                         directionType = message.direction === 'entrada' ? 'IN' : 'OUT';
                     }
                     signals.push({
                         name: message.signal,
                         type: directionType,
                         portName: port.name.replace(/\s/g, ''),
-                        dataType: message.dataType
+                        dataType: message.dataType,
+                        messageType: message.type
                     });
                 });
             }
@@ -682,52 +691,157 @@ Pr_TaskRV_t CEDROOMSystemDeployment::main_task(Pr_TaskP_t){
     }
 
     /**
-     * Genera los casos de traducción de señales entre nodos remotos y locales.
-     * @param remoteNode - Nodo remoto.
-     * @param localNode - Nodo local.
-     * @returns Código fuente para los casos de señales.
+     * Genera el código C++ para los `case` de un `switch` que maneja la recepción de señales
+     * desde un componente remoto a uno local.
+     * @param {Node<NodeData>} remoteNode - El nodo remoto que envía el mensaje.
+     * @param {Node<NodeData>} localNode - El nodo local que recibe el mensaje.
+     * @param {Edge} connection - La conexión específica entre los dos nodos.
+     * @param {string} localNodeName - El nombre del nodo lógico para el que se genera el código.
+     * @returns {string} El código C++ para los `case` de las señales.
      */
-    private static generateSignalCases(remoteNode: Node<NodeData>, localNode: Node<NodeData>): string {
+    private static generateSignalCases(remoteNode: Node<NodeData>, localNode: Node<NodeData>, connection: Edge, localNodeName: string): string {
         let cases = '';
-        const remoteSignals = this.getComponentSignals(remoteNode.data.ports);
-        const localSignals = this.getComponentSignals(localNode.data.ports);
+        
+        const remoteIsSource = connection.source === remoteNode.id;
+        const remotePortHandle = remoteIsSource ? connection.sourceHandle : connection.targetHandle;
+        const localPortHandle = remoteIsSource ? connection.targetHandle : connection.sourceHandle;
 
+        const remotePort = remoteNode.data.ports.find(p => p.id === remotePortHandle);
+        const localPort = localNode.data.ports.find(p => p.id === localPortHandle);
+
+        if (!remotePort || !localPort) {
+            return '';
+        }
+
+        const remoteSignals = this.getComponentSignals([remotePort]);
+        const localSignals = this.getComponentSignals([localPort]);
+        
         const matchingSignals = remoteSignals.filter(rs => rs.type === 'OUT').map(rs => {
             const correspondingLocalSignal = localSignals.find(ls => ls.type === 'IN' && ls.name === rs.name);
             if (correspondingLocalSignal) {
-                return {
-                    remoteSignal: rs,
-                    localSignal: correspondingLocalSignal
-                };
+                return { remoteSignal: rs, localSignal: correspondingLocalSignal };
             }
             return null;
         }).filter(Boolean);
 
         matchingSignals.forEach(match => {
             if (!match) return;
+
+            const remoteComponentClass = this.getComponentClass(remoteNode, localNodeName);
+            const remoteProxyInstance = this.getInstanceName(remoteNode, localNodeName);
+
+            const targetPortOnProxy = match.remoteSignal.portName;
+
             const remoteSignalName = match.remoteSignal.name.replace(/\s/g, '');
-            const localComponentClass = this.getComponentClass(localNode, localNode.data.node!);
-            const localComponentInstance = this.getInstanceName(localNode, localNode.data.node!);
+            const messageType = match.remoteSignal.messageType;
+            const dataType = match.remoteSignal.dataType;
+            const dataPoolName = `EDROOMPool${dataType}`;
+            const isVoidData = dataType.toLowerCase() === 'null' || dataType.toLowerCase() === 'void' || dataType === '';
 
-            const isAsync = true;
+            let signalCode = '';
 
-            const dataPoolName = `EDROOMPoolC${match.remoteSignal.dataType}`;
-
-            const signalCode = `
-                                    case(${localComponentClass}::${remoteSignalName}):{
-                                        uint32_t elementsize = mp_${localComponentInstance}->${dataPoolName}.GetElementSize();
-                                        ${match.remoteSignal.dataType} * pData=mp_${localComponentInstance}->${dataPoolName}.AllocData();
-                                        int32_t msgSize = edroom_can_drv_read_edroom_message(msgPrio, (uint8_t *) pData, elementsize, flush_edroom);
-                                        if(msgSize<=0 || (uint32_t)msgSize != elementsize)
-                                        {
+            switch (messageType) {
+                case 'async': {
+                    if (isVoidData) {
+                        signalCode = `
+                                    case(${remoteComponentClass}::${remoteSignalName}):{
+                                        //Read the NULL data of the message (necessary to discard the message from the buffer)
+                                        uint8_t * pDummy;
+                                        int32_t msgSize = edroom_can_drv_read_edroom_message(msgPrio, pDummy, 0, flush_edroom);
+                                        if(msgSize!=0) {
                                             printf("Error: Wrong msgSize from system bus\\n");
-                                            mp_${localComponentInstance}->${dataPoolName}.FreeData(pData);
                                         }
-                                        ${isAsync ? `mp_${localComponentInstance}->${match.localSignal.portName}.send(msgSignal,pData,&mp_${localComponentInstance}->${dataPoolName});` :
-                                                 `mp_${localComponentInstance}->${match.localSignal.portName}.invoke_from_remote(msgSignal,pData,&mp_${localComponentInstance}->${dataPoolName});`}
+                                        //Send the message but no data. (send)
+                                        mp_${remoteProxyInstance}->${targetPortOnProxy}.send(msgSignal, NULL, NULL);
                                     }
-                                    break;
-            `;
+                                    break;`;
+                    } else {
+                        signalCode = `
+                                    case(${remoteComponentClass}::${remoteSignalName}):{
+                                        //Read the data of the msg
+                                        uint32_t elementsize = mp_${remoteProxyInstance}->${dataPoolName}.GetElementSize();
+                                        ${dataType} * pData = mp_${remoteProxyInstance}->${dataPoolName}.AllocData();
+                                        int32_t msgSize = edroom_can_drv_read_edroom_message(msgPrio, (uint8_t *) pData, elementsize, flush_edroom);
+                                        if(msgSize<=0 || (uint32_t)msgSize != elementsize) {
+                                            //Error case, msg size is wrong
+                                            printf("Error: Wrong msgSize from system bus\\n");
+                                            mp_${remoteProxyInstance}->${dataPoolName}.FreeData(pData);
+                                        } else {
+                                            //Send the message and the data. (send)
+                                            mp_${remoteProxyInstance}->${targetPortOnProxy}.send(msgSignal, pData, &mp_${remoteProxyInstance}->${dataPoolName});
+                                        }
+                                    }
+                                    break;`;
+                    }
+                    break;
+                }
+                case 'invoke': {
+                    if (isVoidData) {
+                        signalCode = `
+                                    case(${remoteComponentClass}::${remoteSignalName}):{
+                                        //Read the NULL data of the message (neccesary to discard the message from the buffer)
+                                        uint8_t * pDummy;
+                                        int32_t msgSize = edroom_can_drv_read_edroom_message(msgPrio, pDummy, 0, flush_edroom);
+                                        if(msgSize!=0) {
+                                            printf("Error: Wrong msgSize from system bus\\n");
+                                        } else {
+                                            mp_${remoteProxyInstance}->${targetPortOnProxy}.invoke_from_remote(msgSignal, NULL, NULL);
+                                        }
+                                    }
+                                    break;`;
+                    } else {
+                        signalCode = `
+                                    case(${remoteComponentClass}::${remoteSignalName}):{
+                                        //Read the data of the msg
+                                        uint32_t elementsize = mp_${remoteProxyInstance}->${dataPoolName}.GetElementSize();
+                                        ${dataType} * pData = mp_${remoteProxyInstance}->${dataPoolName}.AllocData();
+                                        int32_t msgSize = edroom_can_drv_read_edroom_message(msgPrio, (uint8_t *) pData, elementsize, flush_edroom);
+                                        if(msgSize<=0 || (uint32_t)msgSize != elementsize) {
+                                            //Error case, msgSize is wrong
+                                            printf("Error: Wrong msgSize from system bus\\n");
+                                            mp_${remoteProxyInstance}->${dataPoolName}.FreeData(pData);
+                                        } else {
+                                            //Send the message and the data. (invoke)
+                                            mp_${remoteProxyInstance}->${targetPortOnProxy}.invoke_from_remote(msgSignal, pData, &mp_${remoteProxyInstance}->${dataPoolName});
+                                        }
+                                    }
+                                    break;`;
+                    }
+                    break;
+                }
+                case 'reply': {
+                    if (isVoidData) {
+                        signalCode = `
+                                    case(${remoteComponentClass}::${remoteSignalName}):{
+                                        //Read the NULL data of the message (neccesary to discard the message from the buffer)
+                                         uint8_t * pDummy;
+                                        int32_t msgSize = edroom_can_drv_read_edroom_message(msgPrio, pDummy, 0, flush_edroom);
+                                        if(msgSize!=0) {
+                                            printf("Error:Wrong Msg Size for reply\\n");
+                                        } else {
+                                            mp_${remoteProxyInstance}->${targetPortOnProxy}.reply_from_remote(msgSignal);
+                                        }
+                                     }
+                                     break;`;
+                    } else {
+                        signalCode = `
+                                    case(${remoteComponentClass}::${remoteSignalName}):{
+                                        //Read the data of the msg
+                                        uint32_t elementsize = mp_${remoteProxyInstance}->${dataPoolName}.GetElementSize();
+                                        ${dataType} * pData = mp_${remoteProxyInstance}->${dataPoolName}.AllocData();
+                                        int32_t msgSize = edroom_can_drv_read_edroom_message(msgPrio, (uint8_t *) pData, elementsize, flush_edroom);
+                                        if(msgSize<=0 || (uint32_t)msgSize != elementsize) {
+                                            printf("Error: Wrong msgSize from system bus\\n");
+                                            mp_${remoteProxyInstance}->${dataPoolName}.FreeData(pData);
+                                        } else {
+                                            mp_${remoteProxyInstance}->${targetPortOnProxy}.reply_from_remote(msgSignal, pData, &mp_${remoteProxyInstance}->${dataPoolName});
+                                        }
+                                    }
+                                    break;`;
+                    }
+                    break;
+                }
+            }
             cases += signalCode;
         });
 
@@ -735,33 +849,30 @@ Pr_TaskRV_t CEDROOMSystemDeployment::main_task(Pr_TaskP_t){
     }
 
     /**
-     * Genera el código para el registro de interfaces de los nodos.
-     * @param nodes - Lista de nodos del diagrama.
-     * @returns Código fuente para el registro de interfaces.
+     * Genera el código C++ para la función `RegisterInterfaces`.
+     * @param {Node<NodeData>[]} nodes - Todos los nodos del diagrama.
+     * @returns {string} El código C++ para el registro de interfaces.
      */
     private static generateRegisterInterfaces(nodes: Node<NodeData>[], localNodeName: string): string {
-        let content = '';
-
-        nodes.forEach(c => {
+        return nodes.map(c => {
+            let content = '';
             const instanceName = this.getInstanceName(c, localNodeName);
             const componentPorts = c.data.ports;
-            const isRemote = c.data.node !== localNodeName;
 
             content += `	// Register Interfaces for Component ${c.data.componentId}//${c.data.name.replace(/\s/g, '')}\n`;
 
             componentPorts.forEach(port => {
-                // Restricción: No generar puertos de tiempo o interrupción para componentes remotos.
-                if (isRemote && (port.type === 'tiempo' || port.type === 'interrupcion')) {
-                    // No hacer nada para estos puertos.
+                const portName = port.name.replace(/\s/g, '');
+                const portId = port.id;
+                let registrationLine = '';
+                if (port.type === 'tiempo' || port.type === 'interrupcion') {
+                    registrationLine = `	m_localCommSAP.RegisterInterface(${portId}, mp_${instanceName}->${portName}, mp_${instanceName});`;
                 } else {
-                    const portName = port.name.replace(/\s/g, '');
-                    const portId = port.id;
-                    const registrationLine = `	m_localCommSAP.RegisterInterface(${portId}, mp_${instanceName}->${portName}, mp_${instanceName});`;
-                    content += `${registrationLine}\n`;
+                    registrationLine = `	m_localCommSAP.RegisterInterface(${portId}, mp_${instanceName}->${portName}, mp_${instanceName});`;
                 }
+                content += `${registrationLine}\n`;
             });
-            content += `\n`;
-        });
-        return content;
+            return content;
+        }).join('\n');
     }
 }

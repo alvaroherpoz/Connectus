@@ -1,23 +1,21 @@
 /**
- * icuasw_mmesp_project_template.ts
- * Plantilla para generar el archivo principal (.cpp) del proyecto EDROOM.
- * Genera las inclusiones, instancias y configuración de los componentes para el despliegue.
+ * @fileoverview Plantilla para generar el archivo principal (`icuasw_mmesp_project.cpp`) del proyecto EDROOM.
+ * Genera las inclusiones, instancias y configuración de los componentes.
  */
 import type { Node, NodeData } from '../../components/types';
 
 /**
- * Clase que encapsula la generación del archivo principal del proyecto EDROOM.
+ * Genera el contenido del archivo principal del proyecto EDROOM.
  */
 export class icuasw_mmesp_project_template {
     /**
-     * Genera el contenido del archivo principal (.cpp) para el nodo lógico.
-     * @param nodes - Nodos del diagrama.
-     * @param localNodeName - Nombre del nodo local.
-     * @returns Código fuente .cpp generado.
+     * Genera el contenido del archivo `icuasw_mmesp_project.cpp` para un nodo lógico específico.
+     * @param {Node<NodeData>[]} nodes - Todos los nodos del diagrama.
+     * @param {string} localNodeName - El nombre del nodo lógico para el que se genera el código.
+     * @returns {string} El contenido del archivo .cpp.
      */
     public static generateMainFileContent(nodes: Node<NodeData>[], localNodeName: string): string {
 
-        // Generar inclusiones de cabeceras
         const includes = nodes.map(c => {
             const name = c.data.name.replace(/\s/g, '').toLowerCase();
             const prefix = this.getIncludePrefix(c, localNodeName);
@@ -86,13 +84,11 @@ ${initComponents}
 }`;
     }
 
-    // --- Funciones auxiliares para la lógica de la plantilla ---
-
     /**
-     * Obtiene el nombre de instancia para un nodo dado.
-     * @param node - Nodo del diagrama.
-     * @param localNodeName - Nombre del nodo local.
-     * @returns Nombre de instancia.
+     * Obtiene el nombre de la instancia de un componente.
+     * @param {Node<NodeData>} node - El nodo del componente.
+     * @param {string} localNodeName - El nombre del nodo lógico actual.
+     * @returns {string} El nombre de la instancia (p. ej., `rcomponente` o `componente`).
      */
     private static getInstanceName(node: Node<NodeData>, localNodeName: string): string {
         const isRemote = node.data.node !== localNodeName;
@@ -105,10 +101,10 @@ ${initComponents}
     }
 
     /**
-     * Obtiene la clase de componente para un nodo.
-     * @param node - Nodo del diagrama.
-     * @param localNodeName - Nombre del nodo local.
-     * @returns Nombre de la clase de componente.
+     * Obtiene el nombre de la clase C++ para un componente.
+     * @param {Node<NodeData>} node - El nodo del componente.
+     * @param {string} localNodeName - El nombre del nodo lógico actual.
+     * @returns {string} El nombre de la clase (p. ej., `RComponente`, `CCComponente`).
      */
     private static getComponentClass(node: Node<NodeData>, localNodeName: string): string {
         const isRemote = node.data.node !== localNodeName;
@@ -120,16 +116,16 @@ ${initComponents}
             return componentType;
         } else if (!node.data.isTop && isRemote) {
             return `RCC${componentType}`;
-        } else { // !node.data.isTop && !isRemote
+        } else {
             return `CC${componentType}`;
         }
     }
 
     /**
-     * Obtiene el prefijo de inclusión para un nodo.
-     * @param node - Nodo del diagrama.
-     * @param localNodeName - Nombre del nodo local.
-     * @returns Prefijo para el include.
+     * Obtiene el prefijo para la directiva `#include` de un componente.
+     * @param {Node<NodeData>} node - El nodo del componente.
+     * @param {string} localNodeName - El nombre del nodo lógico actual.
+     * @returns {string} El prefijo del include (p. ej., `r`, `cc`).
      */
     private static getIncludePrefix(node: Node<NodeData>, localNodeName: string): string {
         const isRemote = node.data.node !== localNodeName;
@@ -140,7 +136,7 @@ ${initComponents}
             return '';
         } else if (!node.data.isTop && isRemote) {
             return 'rcc';
-        } else { // !node.data.isTop && !isRemote
+        } else {
             return 'cc';
         }
     }

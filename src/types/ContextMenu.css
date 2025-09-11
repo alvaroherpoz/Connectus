@@ -1,4 +1,7 @@
-/* src/ContextMenu.css */
+/*
+ * ContextMenu.css
+ * Estilos para el menú contextual que aparece al hacer clic derecho en un componente.
+ */
 
 .context-menu {
   position: absolute;
