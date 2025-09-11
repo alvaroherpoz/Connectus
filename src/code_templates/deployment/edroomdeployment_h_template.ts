@@ -410,21 +410,24 @@ ${getMemoryFunctions}
     private static portCounter: Record<string, number> = {};
 
     /**
-     * Obtiene el nombre de un puerto a partir de una conexión.
+     * Reinicia el contador de sufijos de puertos.
      * @param {Node<NodeData>[]} nodes - Todos los nodos del diagrama.
      * @param {Edge} edge - La conexión.
      * @param {'source' | 'target'} type - Si se busca el puerto de origen o de destino.
      * @returns {string} El nombre del puerto sin espacios.
      */
     private static resetPortCounter(): void {
-        this.portCounter = {};
+        for (const key in this.portCounter) {
+            delete this.portCounter[key];
+        }
     }
 
     /**
-     * Obtiene el nombre del puerto desde un edge.
-     * @param edge - Conexión entre nodos.
-     * @param type - Tipo de puerto ('source' o 'target').
-     * @returns Nombre del puerto.
+     * Obtiene el nombre de un puerto a partir de una conexión.
+     * @param {Node<NodeData>[]} nodes - Todos los nodos del diagrama.
+     * @param {Edge} edge - La conexión.
+     * @param {'source' | 'target'} type - Si se busca el puerto de origen o de destino.
+     * @returns {string} El nombre del puerto sin espacios.
      */
     private static getPortNameFromEdge(nodes: Node<NodeData>[], edge: Edge, type: 'source' | 'target'): string {
         const nodeId = type === 'source' ? edge.source : edge.target;
