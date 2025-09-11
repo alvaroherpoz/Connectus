@@ -297,10 +297,10 @@
 }
 
 .message-form-actions button:first-of-type {
-    background-color: var(--button-primary-bg);
+    background-color: var(--button-success-bg);
 }
 .message-form-actions button:first-of-type:hover {
-    background-color: var(--button-primary-hover);
+    background-color: var(--button-success-hover);
 }
 
 .message-form-actions .cancel-edit-button {

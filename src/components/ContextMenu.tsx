@@ -289,7 +289,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
      */
     const renderMainView = () => (
         <>
-            <button onClick={() => { setNotification(null); setView('addPort'); }}>Añadir Puerto</button>
+            <button onClick={() => { setNotification(null); setView('addPort'); }}>Crear Puerto</button>
             <button onClick={() => {
                 const nominalPorts = nodes.flatMap(node =>
                     node.data.ports.filter(port => port.type === 'comunicacion' && port.subtype === 'nominal')
@@ -301,8 +301,8 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
                     setView('generateConjugate');
                 }
             }}>Crear Puerto Conjugado</button>
-            <button onClick={() => { setNotification(null); onEditAttributes(); }}>Editar Atributos</button>
-            <button onClick={() => onDeleteNode(nodeId)}>Eliminar Componente</button>
+            <button onClick={() => { setNotification(null); onEditAttributes(); }}>Propiedades</button>
+            <button className="button-danger" onClick={() => onDeleteNode(nodeId)}>Eliminar Componente</button>
         </>
     );
 
@@ -411,8 +411,8 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
                     </div>
                 </>
             )}
-            <button type="submit">Añadir Puerto</button>
-            <button type="button" onClick={() => { setNotification(null); setView('main'); }}>Volver</button>
+            <button type="submit" className="button-success">Crear Puerto</button>
+            <button type="button" className="button-secondary" onClick={() => { setNotification(null); setView('main'); }}>Volver</button>
         </form>
     );
 
@@ -428,7 +428,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
         );
 
         return (
-            <div>
+            <div className="generate-conjugate-view">
                 <h4>Crear Puerto Conjugado</h4>
                 <label htmlFor="nominal-port-select">Puerto Nominal de Origen:</label>
                 <select id="nominal-port-select" onChange={(e) => { setSelectedNominalPort(e.target.value); setNewConjugatePortId(''); setNewConjugatePortName(''); setNotification(null); }} value={selectedNominalPort || ""} title="Seleccionar puerto nominal">
@@ -459,8 +459,8 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
                         />
                     </>
                 )}
-                <button onClick={handleGenerateConjugate} disabled={!selectedNominalPort || !newConjugatePortId.trim() || !newConjugatePortName.trim()}>Crear</button>
-                <button onClick={() => { setNotification(null); setView('main'); }}>Volver</button>
+                <button className="button-success" onClick={handleGenerateConjugate} disabled={!selectedNominalPort || !newConjugatePortId.trim() || !newConjugatePortName.trim()}>Crear</button>
+                <button type="button" className="button-secondary" onClick={() => { setNotification(null); setView('main'); }}>Volver</button>
             </div>
         );
     };
