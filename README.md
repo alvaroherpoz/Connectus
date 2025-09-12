@@ -1,6 +1,6 @@
 # Interactive Wiki of this project 
 
-https://deepwiki.com/alvaroherpoz/Connectus
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/alvaroherpoz/Connectus)
 
 # React + TypeScript + Vite
 
