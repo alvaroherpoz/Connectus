@@ -60,6 +60,14 @@ const App: React.FC = () => {
   const edgeUpdateSuccessful = useRef(true);
 
   /**
+   * Establece el título de la página.
+   * @effect
+   */
+  useEffect(() => {
+    document.title = 'Connectus';
+  }, []);
+
+  /**
    * Gestiona la visibilidad de las notificaciones, ocultándolas después de 3 segundos.
    * @effect
    */
@@ -78,7 +86,6 @@ const App: React.FC = () => {
    * Asigna un color aleatorio para la visualización del nodo lógico.
    */
   const onAddNode = useCallback(() => {
-    // Busca el primer ID de nodo (React Flow) disponible, llenando huecos.
     const existingNodeIds = nodes.map(node => parseInt(node.id, 10)).filter(id => !isNaN(id)).sort((a, b) => a - b);
     let newNodeIdNum = 1;
     for (const id of existingNodeIds) {
@@ -249,14 +256,15 @@ const App: React.FC = () => {
    * @returns {boolean} `true` si el puerto se añadió con éxito, `false` en caso de error.
    */
   const handleAddPort = useCallback(
-    (nodeId: string, name: string, portId: string, type: 'comunicacion' | 'tiempo' | 'interrupcion', subtype: 'nominal' | 'conjugado' | undefined, protocolName?: string, messages?: Message[]): boolean => {
+    (nodeId: string, name: string, portId: string, type: 'comunicacion' | 'tiempo' | 'interrupcion', subtype: 'nominal' | 'conjugado' | undefined, protocolName?: string, messages?: Message[]): void => {
       if (!/^\d+$/.test(portId)) {
         setNotification({ message: 'Error: El ID del puerto debe contener solo números.', type: 'error' });
-        return false;
+        return;
       }
 
-      setNodes((nds) =>
-        nds.map((node) => {
+      setNodes((prevNodes) => {
+        // Paso 1: Añadir el nuevo puerto al nodo de destino.
+        const nodesWithNewPort = prevNodes.map((node) => {
           if (node.id === nodeId) {
             const newPort: PortData = {
               id: portId,
@@ -264,7 +272,7 @@ const App: React.FC = () => {
               type,
               subtype,
               protocolName,
-              messages,
+              messages: messages?.map(msg => ({ ...msg })),
             };
             return {
               ...node,
@@ -275,10 +283,24 @@ const App: React.FC = () => {
             };
           }
           return node;
-        })
-      );
-      setNotification({ message: `Puerto "${name}" añadido con éxito.`, type: 'success' });
-      return true;
+        });
+
+        // Paso 2: Si es un puerto de comunicación, sincronizar los mensajes en todos los puertos con el mismo protocolo.
+        if (type === 'comunicacion' && protocolName && messages) {
+          return nodesWithNewPort.map(node => ({
+            ...node,
+            data: {
+              ...node.data,
+              ports: node.data.ports.map(p =>
+                p.protocolName === protocolName ? { ...p, messages: messages.map(msg => ({ ...msg })) } : p
+              ),
+            },
+          }));
+        }
+
+        return nodesWithNewPort;
+      });
+      setNotification({ message: `Puerto "${name}" añadido y protocolo sincronizado.`, type: 'success' });
     },
     [setNodes, setNotification]
   );
@@ -449,62 +471,26 @@ const App: React.FC = () => {
    * @param {string} nodeId - El ID del nodo del que se eliminará el puerto.
    * @param {string} portId - El ID del puerto a eliminar.
    */
-   const handleDeletePort = useCallback((nodeId: string, portId: string) => {
-    const currentNodes = getNodes();
+  const handleDeletePort = useCallback((nodeId: string, portId: string) => {
     const currentEdges = getEdges();
-
-    const nodeToDeleteFrom = currentNodes.find((n) => n.id === nodeId);
-    const portToDelete = nodeToDeleteFrom?.data.ports.find((p: PortData) => p.id === portId);
-
-    if (!portToDelete) return;
-
-    if (portToDelete.type === 'comunicacion' && portToDelete.subtype === 'nominal') {
-        const connection = currentEdges.find((edge) => edge.source === nodeId && edge.sourceHandle === portId);
-
-        if (connection) {
-            const confirmation = window.confirm("Este puerto nominal está conectado. ¿Estás seguro de que quieres eliminarlo junto con su puerto conjugado y la conexión?");
-            if (!confirmation) return;
-
-            const conjugateNodeId = connection.target;
-            const conjugatePortId = connection.targetHandle;
-
-            setNodes((nds) =>
-                nds.map((n) => {
-                    let ports = n.data.ports;
-                    if (n.id === nodeId) {
-                        ports = ports.filter((p) => p.id !== portId);
-                    }
-                    if (n.id === conjugateNodeId) {
-                        ports = ports.filter((p) => p.id !== conjugatePortId);
-                    }
-                    return { ...n, data: { ...n.data, ports: ports } };
-                })
-            );
-            setEdges((eds) => eds.filter((e) => e.id !== connection.id));
-            setNotification({ message: 'Puerto nominal, conjugado y conexión eliminados.', type: 'success' });
-            setSelectedPort(null);
-            return;
-        }
-    }
-
-    const otherEdgesToDelete = currentEdges.filter(
+    const edgesToDelete = currentEdges.filter(
         (edge) => (edge.source === nodeId && edge.sourceHandle === portId) || (edge.target === nodeId && edge.targetHandle === portId)
     );
 
-    if (otherEdgesToDelete.length > 0) {
+    if (edgesToDelete.length > 0) {
         if (!window.confirm("Este puerto está conectado. ¿Estás seguro de que quieres eliminar el puerto y todas sus conexiones?")) {
             return;
         }
     }
 
-    setEdges((eds) => eds.filter((edge) => !otherEdgesToDelete.includes(edge)));
+    setEdges((eds) => eds.filter((edge) => !edgesToDelete.includes(edge)));
     setNodes((nds) =>
         nds.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, ports: n.data.ports.filter((p) => p.id !== portId) } } : n))
     );
     
     setSelectedPort(null);
     setNotification({ message: 'Puerto eliminado.', type: 'success' });
-  }, [getNodes, getEdges, setNodes, setEdges, setNotification, setSelectedPort]);
+  }, [getEdges, setNodes, setEdges, setNotification, setSelectedPort]);
 
   /**
    * Gestiona el clic en un puerto, abriendo o cerrando su panel de información.
@@ -528,57 +514,43 @@ const App: React.FC = () => {
    */
   const handleUpdatePortMessages = useCallback((nodeId: string, portId: string, newMessages: Message[]) => {
     setNodes(prevNodes => {
-      const connection = edges.find(edge => 
-        (edge.source === nodeId && edge.sourceHandle === portId) || 
-        (edge.target === nodeId && edge.targetHandle === portId)
-      );
-
-      if (!connection) {
+      const portToUpdate = prevNodes.find(n => n.id === nodeId)?.data.ports.find(p => p.id === portId);
+      if (!portToUpdate || !portToUpdate.protocolName) {
         return prevNodes.map(node => {
           if (node.id === nodeId) {
             return {
               ...node,
               data: {
                 ...node.data,
-                ports: node.data.ports.map(p => (p.id === portId ? { ...p, messages: newMessages } : p)),
+                ports: node.data.ports.map(p => (p.id === portId ? { ...p, messages: newMessages.map(msg => ({ ...msg })) } : p)),
               },
             };
           }
           return node;
         });
       }
+      
+      const protocolToUpdate = portToUpdate.protocolName;
 
-      const isSource = connection.source === nodeId;
-      const connectedNodeId = isSource ? connection.target : connection.source;
-      const connectedPortId = isSource ? connection.targetHandle : connection.sourceHandle;
-
-      const syncedMessages: Message[] = newMessages.map(msg => ({ ...msg }));
-
+      // Actualizar todos los puertos que comparten este protocolo.
       return prevNodes.map(node => {
-        if (node.id === nodeId) {
-          return {
-            ...node,
-            data: {
-              ...node.data,
-              ports: node.data.ports.map(p => (p.id === portId ? { ...p, messages: newMessages } : p)),
-            },
-          };
-        }
-        if (node.id === connectedNodeId) {
-          return {
-            ...node,
-            data: {
-              ...node.data,
-              ports: node.data.ports.map(p => (p.id === connectedPortId ? { ...p, messages: syncedMessages } : p)),
-            },
-          };
-        }
-        return node;
+        const needsUpdate = node.data.ports.some(p => p.protocolName === protocolToUpdate);
+        if (!needsUpdate) return node;
+
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            ports: node.data.ports.map(p => 
+              p.protocolName === protocolToUpdate ? { ...p, messages: newMessages.map(msg => ({ ...msg })) } : p
+            ),
+          },
+        };
       });
     });
 
-    setNotification({ message: 'Mensajes del puerto actualizados y sincronizados con el puerto conectado.', type: 'success' });
-  }, [setNodes, edges, setNotification]);
+    setNotification({ message: 'Mensajes del protocolo actualizados en todos los puertos.', type: 'success' });
+  }, [setNodes, setNotification]);
   
   /**
    * Actualiza el ID y el nombre de un puerto, validando duplicados y actualizando conexiones.
@@ -610,50 +582,40 @@ const App: React.FC = () => {
         return false;
     }
 
-    setNodes(prevNodes => {
-      let updatedNodes = [...prevNodes];
-
-      const connection = edges.find(edge => 
-        (edge.source === nodeId && edge.sourceHandle === oldPortId) || 
-        (edge.target === nodeId && edge.targetHandle === oldPortId)
-      );
-
-      updatedNodes = updatedNodes.map(node => {
+    setNodes(prevNodes =>
+      prevNodes.map(node => {
         if (node.id === nodeId) {
-          const updatedPorts = node.data.ports.map(p => 
-            p.id === oldPortId ? { ...p, id: newPortId, name: newPortName } : p
-          );
-          return { ...node, data: { ...node.data, ports: updatedPorts } };
-        }
-
-        if (connection && node.id === (connection.source === nodeId ? connection.target : connection.source)) {
-          const connectedPortId = connection.source === nodeId ? connection.targetHandle : connection.sourceHandle;
-          const updatedPorts = node.data.ports.map(p => 
-            p.id === connectedPortId ? { ...p, name: newPortName } : p
-          );
-          return { ...node, data: { ...node.data, ports: updatedPorts } };
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              ports: node.data.ports.map(p =>
+                p.id === oldPortId ? { ...p, id: newPortId, name: newPortName } : p
+              ),
+            },
+          };
         }
 
         return node;
-      });
-
-      return updatedNodes;
-    });
+      })
+    );
 
     if (oldPortId !== newPortId) {
-      setEdges(prevEdges => prevEdges.map(edge => {
+      setEdges(prevEdges =>
+        prevEdges.map(edge => {
           if (edge.source === nodeId && edge.sourceHandle === oldPortId) {
-              return { ...edge, sourceHandle: newPortId };
+            return { ...edge, sourceHandle: newPortId };
           }
           if (edge.target === nodeId && edge.targetHandle === oldPortId) {
-              return { ...edge, targetHandle: newPortId };
+            return { ...edge, targetHandle: newPortId };
           }
           return edge;
-      }));
+        })
+      );
     }
 
     return true;
-  }, [setNodes, setEdges, nodes, edges, setNotification]);
+  }, [setNodes, setEdges, nodes, setNotification]);
 
 
   /**
@@ -776,28 +738,31 @@ const App: React.FC = () => {
   return (
     <div className="app-container">
       <div className="toolbar">
-        <button className="toolbar-button" onClick={onAddNode}>
-          Añadir Componente
-        </button>
-        <div className="tools-dropdown">
-          <button className="toolbar-button toolbar-button-tools" onClick={() => setShowToolsMenu(!showToolsMenu)}>Herramientas</button>
-          {showToolsMenu && (
-            <div className="dropdown-menu">
-              <div className="dropdown-item file-input-container">
-                <input
-                  type="text"
-                  placeholder="Nombre del archivo"
-                  value={downloadFileName}
-                  onChange={(e) => setDownloadFileName(e.target.value)}
-                />
-                <button onClick={handleDownload}>Descargar Diagrama</button>
+        <div className="toolbar-left">
+          <button className="toolbar-button" onClick={onAddNode}>
+            Añadir Componente
+          </button>
+          <div className="tools-dropdown">
+            <button className="toolbar-button toolbar-button-tools" onClick={() => setShowToolsMenu(!showToolsMenu)}>Herramientas</button>
+            {showToolsMenu && (
+              <div className="dropdown-menu">
+                <div className="dropdown-item file-input-container">
+                  <input
+                    type="text"
+                    placeholder="Nombre del archivo"
+                    value={downloadFileName}
+                    onChange={(e) => setDownloadFileName(e.target.value)}
+                  />
+                  <button onClick={handleDownload}>Descargar Diagrama</button>
+                </div>
+                <button className="dropdown-item" onClick={handleLoadButtonClick}>Cargar Diagrama</button>
+                <button className="dropdown-item" onClick={handleGenerateCode}>Generar Código</button>
+                <button className="dropdown-item" onClick={() => setShowAbout(true)}>Acerca de</button>
               </div>
-              <button className="dropdown-item" onClick={handleLoadButtonClick}>Cargar Diagrama</button>
-              <button className="dropdown-item" onClick={handleGenerateCode}>Generar Código</button>
-              <button className="dropdown-item" onClick={() => setShowAbout(true)}>Acerca de</button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
+        <h1 className="logo">Connectus</h1>
       </div>
 
       <label htmlFor="file-upload" className="hidden-input-label">Cargar Archivo</label>

@@ -151,6 +151,11 @@
   color: #6c757d;
 }
 
+.context-menu .message-item .message-actions {
+  display: flex;
+  gap: 5px;
+}
+
 .context-menu .delete-message-btn {
   background: none;
   border: 1px solid transparent;
@@ -166,6 +171,21 @@
 .context-menu .delete-message-btn:hover {
     background-color: #dc3545;
     color: white;
+}
+
+.context-menu .edit-message-btn {
+  background: none;
+  border: 1px solid transparent;
+  color: #0d6efd;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.context-menu .edit-message-btn:hover {
+  background-color: #0d6efd;
+  color: white;
 }
 
 .context-menu .bottom-close-button {

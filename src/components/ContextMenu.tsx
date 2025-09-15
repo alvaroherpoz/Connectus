@@ -2,7 +2,7 @@
  * @fileoverview Menú contextual para realizar acciones sobre los nodos del diagrama.
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import type { ChangeEvent, FormEvent } from 'react';
 import type { Message, Node, NodeData, MessageType} from './types';
 import '../types/ContextMenu.css';
@@ -61,7 +61,8 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
     const [portId, setPortId] = useState('');
     const [portName, setPortName] = useState('');
     const [portType, setPortType] = useState<'comunicacion' | 'tiempo' | 'interrupcion'>('comunicacion');
-    const [protocolName, setProtocolName] = useState('');
+    const [selectedProtocol, setSelectedProtocol] = useState('');
+    const [newProtocolName, setNewProtocolName] = useState('');
     const [messages, setMessages] = useState<Message[]>([]);
     const [messageSignal, setMessageSignal] = useState('');
     const [messageDataType, setMessageDataType] = useState('');
@@ -69,10 +70,49 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
     const [messageType, setMessageType] = useState<MessageType>('invoke');
     const [selectedInvokeSignal, setSelectedInvokeSignal] = useState('');
     const [selectedNominalPort, setSelectedNominalPort] = useState<string | null>(null);
+    const [editingMessageIndex, setEditingMessageIndex] = useState<number | null>(null);
     const [newConjugatePortName, setNewConjugatePortName] = useState('');
     const [newConjugatePortId, setNewConjugatePortId] = useState('');
     const [newDataTypeName, setNewDataTypeName] = useState('');
     const [showNewDataTypeInput, setShowNewDataTypeInput] = useState(false);
+
+    const existingProtocols = useMemo(() => {
+        const protocols = new Set<string>();
+        nodes.forEach(node => {
+            node.data.ports.forEach(port => {
+                if (port.type === 'comunicacion' && port.protocolName) {
+                    protocols.add(port.protocolName);
+                }
+            });
+        });
+        return Array.from(protocols).sort();
+    }, [nodes]);
+
+    const handleProtocolChange = useCallback((e: ChangeEvent<HTMLSelectElement>) => {
+        const protocol = e.target.value;
+        setSelectedProtocol(protocol);
+        setNotification(null);
+
+        if (protocol && protocol !== 'new') { 
+            const allMessages: Message[] = [];
+            const signalNames = new Set<string>();
+            nodes.forEach(node => {
+                node.data.ports.forEach(port => {
+                    if (port.protocolName === protocol && port.messages) {
+                        port.messages.forEach(msg => {
+                            if (!signalNames.has(msg.signal)) {
+                                allMessages.push(msg);
+                                signalNames.add(msg.signal);
+                            }
+                        });
+                    }
+                });
+            });
+            setMessages(allMessages); 
+        } else {
+            setMessages([]); 
+        }
+    }, [nodes, setNotification]);
 
     /**
      * Recopila todos los mensajes de tipo 'invoke' que existen en el protocolo actual,
@@ -83,25 +123,14 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
         const invokes: Message[] = [];
         const invokeSignals = new Set<string>();
 
-        // Revisa los mensajes que se están añadiendo al puerto nuevo
         messages.filter(m => m.type === 'invoke').forEach(m => {
-            invokes.push(m);
-            invokeSignals.add(m.signal);
-        });
-
-        // Revisa los mensajes en puertos existentes del mismo protocolo
-        nodes.forEach(node => node.data.ports.forEach(p => {
-            if (p.protocolName === protocolName && p.messages) {
-                p.messages.forEach(m => {
-                    if (m.type === 'invoke' && !invokeSignals.has(m.signal)) {
-                        invokes.push(m);
-                        invokeSignals.add(m.signal);
-                    }
-                });
+            if (!invokeSignals.has(m.signal)) {
+                invokes.push(m);
+                invokeSignals.add(m.signal);
             }
-        }));
+        });
         return invokes;
-    }, [nodes, protocolName, messages]);
+    }, [messages]);
 
     /**
      * Añade un nuevo mensaje a la lista de mensajes del puerto que se está creando.
@@ -112,14 +141,11 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
              return;
          }
  
-         const isSignalDuplicate = nodes.some(node =>
-            node.data.ports.some(p =>
-                p.protocolName === protocolName && p.messages?.some(m => m.signal === messageSignal)
-            )
-         ) || messages.some(m => m.signal === messageSignal);
+         const finalProtocolName = selectedProtocol === 'new' ? newProtocolName.trim() : selectedProtocol;
+         const isSignalDuplicate = messages.some((m, index) => m.signal === messageSignal && index !== editingMessageIndex);
 
          if (isSignalDuplicate) {
-            setNotification({ message: `Error: Ya existe un mensaje con la señal "${messageSignal}" en el protocolo "${protocolName}".`, type: 'error' });
+            setNotification({ message: `Error: Ya existe un mensaje con la señal "${messageSignal}" en el protocolo "${finalProtocolName}".`, type: 'error' });
             return;
          }
  
@@ -146,20 +172,64 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
          if (messageType === 'reply') {
             newMessage.invokeSignal = selectedInvokeSignal;
          }
-         setMessages(prev => [...prev, newMessage]);
-         setMessageSignal('');
-         setMessageDataType('');
-         setSelectedInvokeSignal('');
-         setNotification(null);
-     }, [messageSignal, messageDataType, messageDirection, messageType, messages, protocolName, nodes, setNotification, getInvokeMessagesInProtocol, selectedInvokeSignal]);
+
+         if (editingMessageIndex !== null) {
+            const updatedMessages = [...messages];
+            updatedMessages[editingMessageIndex] = newMessage;
+            setMessages(updatedMessages);
+            setNotification({ message: 'Mensaje actualizado.', type: 'info' });
+         } else {
+            setMessages(prev => [...prev, newMessage]);
+            setNotification({ message: `Mensaje "${messageSignal}" listo para ser añadido.`, type: 'info' });
+         }
+         resetMessageForm();
+     }, [messageSignal, messageDataType, messageDirection, messageType, messages, editingMessageIndex, selectedProtocol, newProtocolName, setNotification, getInvokeMessagesInProtocol, selectedInvokeSignal]);
+
+    const resetMessageForm = () => {
+        setMessageSignal('');
+        setMessageDataType('');
+        setMessageDirection('entrada');
+        setMessageType('invoke');
+        setSelectedInvokeSignal('');
+        setEditingMessageIndex(null);
+    };
+
+    const handleEditMessage = useCallback((index: number) => {
+        const messageToEdit = messages[index];
+        setEditingMessageIndex(index);
+        setMessageSignal(messageToEdit.signal);
+        setMessageDataType(messageToEdit.dataType);
+        setMessageDirection(messageToEdit.direction);
+        setMessageType(messageToEdit.type);
+        setSelectedInvokeSignal(messageToEdit.invokeSignal || '');
+    }, [messages]);
 
     /**
      * Elimina un mensaje de la lista de mensajes del puerto.
      * @param {number} index - El índice del mensaje a eliminar.
      */
     const handleRemoveMessage = useCallback((index: number) => {
-        setMessages((prevMessages) => prevMessages.filter((_, i) => i !== index));
-    }, []);
+        const messageToDelete = messages[index];
+        let updatedMessages = [...messages];
+
+        if (messageToDelete.type === 'invoke') {
+            const replyIndex = updatedMessages.findIndex(
+                (msg, i) => i !== index && msg.type === 'reply' && msg.invokeSignal === messageToDelete.signal
+            );
+
+            if (replyIndex !== -1) {
+                updatedMessages = updatedMessages.filter((_, i) => i !== index && i !== replyIndex);
+            } else {
+                updatedMessages = updatedMessages.filter((_, i) => i !== index);
+            }
+        } else {
+            updatedMessages = updatedMessages.filter((_, i) => i !== index);
+        }
+
+        setMessages(updatedMessages);
+        setNotification({ message: 'Mensaje eliminado de la lista.', type: 'info' });
+        resetMessageForm();
+    }, [messages, setNotification]);
 
     /**
      * Añade un nuevo tipo de dato a la lista global de tipos de datos personalizados.
@@ -198,7 +268,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
         
         const trimmedId = portId.trim();
         const trimmedName = portName.trim();
-        const trimmedProtocolName = protocolName.trim();
+        const finalProtocolName = (selectedProtocol === 'new' ? newProtocolName.trim() : selectedProtocol);
 
         if (!trimmedId || !/^\d+$/.test(trimmedId)) {
             setNotification({ message: 'El ID del puerto es obligatorio y debe contener solo números.', type: 'error' });
@@ -209,7 +279,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
             return;
         }
 
-        if (portType === 'comunicacion' && !trimmedProtocolName) {
+        if (portType === 'comunicacion' && !finalProtocolName) {
             setNotification({ message: 'El nombre del protocolo es obligatorio para puertos de comunicación.', type: 'error' });
             return;
         }
@@ -229,9 +299,9 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
             return;
         }
         
-        onAddPort(nodeId, trimmedName, trimmedId, portType, 'nominal', trimmedProtocolName, messages);
+        onAddPort(nodeId, trimmedName, trimmedId, portType, 'nominal', finalProtocolName, messages);
         onClose();
-    }, [onAddPort, portId, portName, portType, protocolName, messages, onClose, nodes, nodeId, setNotification]);
+    }, [onAddPort, portId, portName, portType, selectedProtocol, newProtocolName, messages, onClose, nodes, nodeId, setNotification]);
 
     /**
      * Procesa y valida los datos para crear un puerto conjugado a partir de un
@@ -335,17 +405,22 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
             </label>
             {portType === 'comunicacion' && (
                 <>
-                    <label>
-                        Nombre del Protocolo:
-                        <input
-                            type="text"
-                            value={protocolName}
-                            onChange={(e: ChangeEvent<HTMLInputElement>) => { setProtocolName(e.target.value); setNotification(null); }}
-                            required
-                        />
+                    <label htmlFor="protocol-select">
+                        Protocolo:
+                        <select id="protocol-select" value={selectedProtocol} onChange={handleProtocolChange} required>
+                            <option value="" disabled>Seleccionar Protocolo</option>
+                            {existingProtocols.map(p => <option key={p} value={p}>{p}</option>)}
+                            <option value="new">Nuevo Protocolo...</option>
+                        </select>
                     </label>
+                    {selectedProtocol === 'new' && (
+                        <label>
+                            Nombre del Nuevo Protocolo:
+                            <input type="text" value={newProtocolName} onChange={(e) => setNewProtocolName(e.target.value)} required />
+                        </label>
+                    )}
                     <div>
-                        <h4>Mensajes</h4>
+                        <h4>{editingMessageIndex !== null ? 'Editar Mensaje' : 'Mensajes del Protocolo'}</h4>
                         {messages.length > 0 && (
                             <div className="message-list">
                                 {messages.map((msg, index) => (
@@ -354,7 +429,10 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
                                             {msg.signal} - {msg.dataType} ({msg.direction}) [{msg.type}]
                                             {msg.type === 'reply' && msg.invokeSignal && ` (reply a ${msg.invokeSignal})`}
                                         </span>
-                                        <button type="button" onClick={() => handleRemoveMessage(index)} className="delete-message-btn">X</button>
+                                        <div className="message-actions">
+                                            <button type="button" onClick={() => handleEditMessage(index)} className="edit-message-btn">Editar</button>
+                                            <button type="button" onClick={() => handleRemoveMessage(index)} className="delete-message-btn">&times;</button>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -395,7 +473,8 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
                                 <option value="entrada">Entrada</option>
                                 <option value="salida">Salida</option>
                             </select>
-                            <button type="button" onClick={handleAddMessage}>Añadir</button>
+                            <button type="button" onClick={handleAddMessage}>{editingMessageIndex !== null ? 'Guardar' : 'Añadir'}</button>
+                            {editingMessageIndex !== null && <button type="button" onClick={resetMessageForm}>Cancelar</button>}
                         </div>
                         {showNewDataTypeInput && (
                             <div className="add-data-type-container">

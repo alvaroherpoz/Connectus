@@ -106,7 +106,6 @@ const PortInfoPanel: React.FC<PortInfoPanelProps> = ({
         // 2. Revisa los mensajes en otros puertos del mismo protocolo
         nodes.forEach(node => {
             node.data.ports.forEach(p => {
-                // Omite el puerto actual, ya que sus mensajes ya están en el estado local `messages`
                 if (node.id === nodeId && p.id === port.id) {
                     return;
                 }
@@ -220,7 +219,7 @@ const PortInfoPanel: React.FC<PortInfoPanelProps> = ({
 
         if (messageToDelete.type === 'invoke') {
             const replyIndex = updatedMessages.findIndex(
-                (msg, i) => i !== index && msg.type === 'reply' && msg.signal === messageToDelete.signal
+                (msg, i) => i !== index && msg.type === 'reply' && msg.invokeSignal === messageToDelete.signal
             );
 
             if (replyIndex !== -1) {
@@ -233,7 +232,6 @@ const PortInfoPanel: React.FC<PortInfoPanelProps> = ({
         }
 
         setMessages(updatedMessages);
-        // Notificar al usuario que debe guardar para aplicar los cambios y sincronizar
         setNotification({ message: 'Mensaje eliminado. Guarde los cambios para aplicar la sincronización de los mensajes en el protocolo.', type: 'info' });
         resetMessageForm();
     }, [messages, setNotification]);
