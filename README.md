@@ -1,3 +1,7 @@
+# Interactive Wiki of this project 
+
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/alvaroherpoz/Connectus)
+
 # React + TypeScript + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
