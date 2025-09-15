@@ -146,6 +146,11 @@
   border-bottom: none;
 }
 
+.context-menu .message-item.read-only {
+  background-color: #e9ecef;
+  color: #6c757d;
+}
+
 .context-menu .delete-message-btn {
   background: none;
   border: 1px solid transparent;

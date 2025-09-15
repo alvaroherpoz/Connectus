@@ -1,0 +1,61 @@
+@startuml
+!theme plain
+title Figura X: Diagrama de Componentes Vertical - Arquitectura de Connectus
+
+skinparam componentStyle uml2
+skinparam packageStyle rectangle
+
+rectangle "Capa de Presentación (UI)" as UI_Layer {
+    [Barra de Herramientas] as Toolbar
+    [Paneles de Edición] as Panels
+    [Menú Contextual] as ContextMenu
+    [Sistema de Notificaciones] as Notifications
+}
+
+rectangle "Núcleo de la Aplicación" as Core_Layer {
+    [Orquestador Principal (App.tsx)] as AppOrchestrator
+    [Gestor de Estado (Hooks)] as StateManager
+    [Lienzo Interactivo (React Flow)] as Canvas
+}
+
+rectangle "Capa de Servicios y Dependencias" as Service_Layer {
+    package "Servicios Internos" {
+        [Generador de Código C++] as CodeGenerator
+        [Plantillas de Código] as Templates
+    }
+    package "Librerías Externas" {
+        [React]
+        [React Flow] as RF
+        [JSZip]
+        [FileSaver.js]
+    }
+}
+
+' --- Pista de diseño vertical ---
+UI_Layer -[hidden]down-> Core_Layer
+Core_Layer -[hidden]down-> Service_Layer
+
+' --- Conexiones ---
+' UI -> Núcleo
+Toolbar -down-> AppOrchestrator : notifica acciones
+Panels -down-> AppOrchestrator : notifica cambios
+ContextMenu -down-> AppOrchestrator : invoca acciones
+AppOrchestrator -up-> Notifications : controla
+
+' Internas del Núcleo
+AppOrchestrator -down-> StateManager : gestiona
+AppOrchestrator -down-> Canvas : renderiza
+
+' Núcleo -> Servicios
+AppOrchestrator ..> CodeGenerator : utiliza
+
+' Dependencias de Servicios
+CodeGenerator -down-> Templates : lee
+CodeGenerator ..> JSZip : utiliza
+CodeGenerator ..> [FileSaver.js] : utiliza
+
+' Núcleo -> Librerías Externas
+StateManager -up-|> React : "implementado con"
+Canvas -up-|> RF : "implementado con"
+
+@enduml

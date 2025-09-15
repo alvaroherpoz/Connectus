@@ -599,6 +599,10 @@ Pr_TaskRV_t CEDROOMSystemDeployment::main_task(Pr_TaskP_t){
                 }
             }
         });
+        if(timerPortsCount != 0)
+        {
+            timerPortsCount = timerPortsCount * 2 + 1;
+        }
         return asyncMessagesCount + invokePortsCount + timerPortsCount;
     }
 
@@ -613,9 +617,9 @@ Pr_TaskRV_t CEDROOMSystemDeployment::main_task(Pr_TaskP_t){
         const componentNameBase = node.data.name.toLowerCase().replace(/\s/g, '');
         
         if (isRemote) {
-            return `r${componentNameBase}`;
+            return `r${componentNameBase}_${node.id}`;
         }
-        return componentNameBase;
+        return `${componentNameBase}_${node.id}`;
     }
 
     /**
@@ -626,7 +630,7 @@ Pr_TaskRV_t CEDROOMSystemDeployment::main_task(Pr_TaskP_t){
      */
     private static getComponentClass(node: Node<NodeData>, localNodeName: string): string {
         const isRemote = node.data.node !== localNodeName;
-        const componentType = node.data.name.replace(/\s/g, '');
+        const componentType = node.data.componentClass.replace(/\s/g, '');
 
         if (node.data.isTop && isRemote) {
             return `R${componentType}`;

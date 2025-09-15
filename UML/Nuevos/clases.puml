@@ -1,0 +1,86 @@
+@startuml
+!theme plain
+title Figura 2. Diagrama de Clases y Modelo de Datos
+
+package "Modelo de Datos (definido en src/components/types.ts)" {
+    interface NodeData {
+      + name: string
+      + ports: PortData[]
+      + node?: string
+      + componentId: number
+      + maxMessages: number
+      + priority: ComponentPriority
+      + stackSize: number
+      + isTop?: boolean
+    }
+
+    interface PortData {
+      + id: string
+      + name: string
+      + type: 'comunicacion' | 'tiempo' | 'interrupcion'
+      + subtype?: 'nominal' | 'conjugado'
+      + protocolName?: string
+      + messages?: Message[]
+    }
+
+    interface Message {
+      + signal: string
+      + dataType: string
+      + direction: 'entrada' | 'salida'
+      + type: MessageType
+      + invokeSignal?: string
+    }
+}
+
+NodeData "1" *-- "0..*" PortData : "contiene"
+PortData "1" *-- "0..*" Message : "contiene"
+
+package "Actores Principales (Componentes y Servicios)" {
+    class App <<Componente Contenedor>> {
+      - nodes: Node<NodeData>[]
+      - edges: Edge[]
+      + onAddNode()
+      + onConnect(connection)
+      + handleUpdateNodeAttributes(...)
+      + handleAddPort(...)
+      + handleGenerateCode()
+    }
+
+    class ComponentNode <<Componente Visual>> {
+      + data: NodeData
+      + onPortClick(...)
+      + onDeletePort(...)
+    }
+
+    class PortInfoPanel <<Componente Visual>> {
+      + port: PortData
+      + onUpdatePortMessages(...)
+      + onUpdatePortId(...)
+    }
+
+    class CodeGenerator <<Servicio>> {
+      {static} + generateCodeAndDownload(nodes, edges)
+    }
+}
+
+App "1" *-- "0..*" ComponentNode : "renderiza y controla"
+App o-- PortInfoPanel : "muestra y gestiona"
+
+App ..> CodeGenerator : "utiliza"
+
+ComponentNode ..> NodeData : "visualiza"
+PortInfoPanel ..> PortData : "edita"
+PortInfoPanel ..> App : "notifica cambios"
+
+note right of App
+  Componente orquestador que centraliza
+  el estado y la lógica de negocio.
+  Implementa el patrón "lifting state up".
+end note
+
+note bottom of CodeGenerator
+  Clase de utilidad estática, implementada en
+  `CodeGenerator.ts`. Desacopla la lógica de
+  generación de código de la capa de presentación.
+end note
+@enduml

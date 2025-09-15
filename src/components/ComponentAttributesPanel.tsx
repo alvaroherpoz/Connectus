@@ -150,6 +150,15 @@ const ComponentAttributesPanel: React.FC<ComponentAttributesPanelProps> = ({
           />
         </div>
         <div className="form-group">
+          <label htmlFor="component-class">Clase del Componente</label>
+          <input
+            id="component-class"
+            type="text"
+            value={localData.componentClass}
+            onChange={(e) => setLocalData({ ...localData, componentClass: e.target.value })}
+          />
+        </div>
+        <div className="form-group">
           <label htmlFor="component-name">Nombre</label>
           <input
             id="component-name"

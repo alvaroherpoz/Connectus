@@ -73,6 +73,8 @@ export interface PortData {
  * @interface NodeData
  */
 export interface NodeData {
+  /** Clase del componente. */
+  componentClass: string;
   /** Nombre del componente. */
   name: string;
   /** Lista de puertos del componente. */

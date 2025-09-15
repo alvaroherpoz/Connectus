@@ -48,6 +48,7 @@ const ComponentNode: React.FC<ComponentNodeProps> = memo(({ id, data, onDeletePo
                 {data.node && <span className="node-tag">{data.node} ::</span>}
                 {data.isTop && <span className="top-component-tag">👑</span>}
                 <span className="component-name-label">{data.name}</span>
+                <span className="component-class-label">[{data.componentClass}]</span>
             </div>
             <div className="component-node-ports-container">
                 {data.ports.length > 0 && (

@@ -24,7 +24,7 @@ export class edroomdeployment_h_template {
 
         // 1. Generar inclusiones de cabeceras para TODOS los componentes
         const includes = nodes.map(c => {
-            const name = c.data.name.replace(/\s/g, '').toLowerCase();
+            const name = c.data.componentClass.replace(/\s/g, '').toLowerCase();
             const prefix = this.getIncludePrefix(c, localNodeName);
             
             return `#include <public/${prefix}${name}_iface_v1.h>`;
@@ -347,6 +347,11 @@ ${getMemoryFunctions}
                 }
             }
         });
+        
+        if(timerPortsCount != 0)
+        {
+            timerPortsCount = timerPortsCount * 2 + 1;
+        }
         return asyncMessagesCount + invokePortsCount + timerPortsCount;
     }
     
@@ -361,9 +366,9 @@ ${getMemoryFunctions}
         const componentNameBase = node.data.name.toLowerCase().replace(/\s/g, '');
         
         if (isRemote) {
-            return `r${componentNameBase}`;
+            return `r${componentNameBase}_${node.id}`;
         }
-        return componentNameBase;
+        return `${componentNameBase}_${node.id}`;
     }
     
     /**
@@ -374,7 +379,7 @@ ${getMemoryFunctions}
      */
     private static getComponentClass(node: Node<NodeData>, localNodeName: string): string {
         const isRemote = node.data.node !== localNodeName;
-        const componentType = node.data.name.replace(/\s/g, '');
+        const componentType = node.data.componentClass.replace(/\s/g, '');
 
         if (node.data.isTop && isRemote) {
             return `R${componentType}`;

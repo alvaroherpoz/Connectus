@@ -105,7 +105,8 @@ const App: React.FC = () => {
       id: newId,
       type: 'componentNode',
       data: {
-          name: `Componente${newComponentId}`,
+          componentClass: `Clase${newComponentId}`,
+          name: `Nombre${newComponentId}`,
           ports: [],
           node: defaultNodeName,
           componentId: newComponentId,
