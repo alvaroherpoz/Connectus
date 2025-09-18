@@ -55,22 +55,21 @@ export class edroomdeployment_h_template {
         
         // 5. Generar las funciones de conversión de señales
         this.resetPortCounter();
-        const signalConversions = allConnections.map(conn => {
-            const sourceNode = nodes.find(n => n.id === conn.source);
-            const targetNode = nodes.find(n => n.id === conn.target);
+        const signalConversions = edges.map(conn => {
+            const sourceNode = nodes.find(n => n.id === conn.source)!;
+            const targetNode = nodes.find(n => n.id === conn.target)!;
+            const sourceName = sourceNode.data.name.replace(/\s/g, '');
+            const targetName = targetNode.data.name.replace(/\s/g, '');
+            const sourcePortName = this.getPortNameFromEdge(nodes, conn, 'source');
+            const targetPortName = this.getPortNameFromEdge(nodes, conn, 'target');
             
-            const sourceId = sourceNode?.data.componentId;
-            const sourceName = sourceNode?.data.name.replace(/\s/g, '');
-            const sourcePort = this.getPortNameFromEdge(nodes, conn, 'source');
-            
-            const targetId = targetNode?.data.componentId;
-            const targetName = targetNode?.data.name.replace(/\s/g, '');
-            const targetPort = this.getPortNameFromEdge(nodes, conn, 'target');
+            const port_source_name = sourcePortName;
+            const port_target_name = targetPortName;
 
             return `
 //Signal Conversion
-    static TEDROOMSignal C${sourceId}${sourceName}_P${sourcePort}__C${targetId}${targetName}_P${targetPort}(TEDROOMSignal signal);
-    static TEDROOMSignal C${targetId}${targetName}_P${targetPort}__C${sourceId}${sourceName}_P${sourcePort}(TEDROOMSignal signal);
+    static TEDROOMSignal C${sourceNode.data.componentId}${sourceName}_P${port_source_name}__C${targetNode.data.componentId}${targetName}_P${port_target_name}(TEDROOMSignal signal);
+    static TEDROOMSignal C${targetNode.data.componentId}${targetName}_P${port_target_name}__C${sourceNode.data.componentId}${sourceName}_P${port_source_name}(TEDROOMSignal signal);
 `;
         }).join('\n');
         

@@ -862,6 +862,7 @@ Pr_TaskRV_t CEDROOMSystemDeployment::main_task(Pr_TaskP_t){
             let content = '';
             const instanceName = this.getInstanceName(c, localNodeName);
             const componentPorts = c.data.ports;
+            const isLocalComponent = c.data.node === localNodeName;
 
             content += `	// Register Interfaces for Component ${c.data.componentId}//${c.data.name.replace(/\s/g, '')}\n`;
 
@@ -870,7 +871,10 @@ Pr_TaskRV_t CEDROOMSystemDeployment::main_task(Pr_TaskP_t){
                 const portId = port.id;
                 let registrationLine = '';
                 if (port.type === 'tiempo' || port.type === 'interrupcion') {
-                    registrationLine = `	m_localCommSAP.RegisterInterface(${portId}, mp_${instanceName}->${portName}, mp_${instanceName});`;
+                    if(isLocalComponent)
+                    {
+                        registrationLine = `	m_localCommSAP.RegisterInterface(${portId}, mp_${instanceName}->${portName}, mp_${instanceName});`;
+                    }
                 } else {
                     registrationLine = `	m_localCommSAP.RegisterInterface(${portId}, mp_${instanceName}->${portName}, mp_${instanceName});`;
                 }

@@ -81,7 +81,9 @@ ${initComponents}
     //}
     //;
 
-}`;
+}
+    
+`;
     }
 
     /**
@@ -92,7 +94,7 @@ ${initComponents}
      */
     private static getInstanceName(node: Node<NodeData>, localNodeName: string): string {
         const isRemote = node.data.node !== localNodeName;
-        const componentNameBase = node.data.name.toLowerCase().replace(/\s/g, '');
+        const componentNameBase = node.data.name.replace(/\s/g, '');
         
         if (isRemote) {
             return `r${componentNameBase}_${node.id}`;
@@ -115,9 +117,9 @@ ${initComponents}
         } else if (node.data.isTop && !isRemote) {
             return componentType;
         } else if (!node.data.isTop && isRemote) {
-            return `RCC${componentType}`;
+            return `R${componentType}`;
         } else {
-            return `CC${componentType}`;
+            return `${componentType}`;
         }
     }
 
@@ -135,9 +137,9 @@ ${initComponents}
         } else if (node.data.isTop && !isRemote) {
             return '';
         } else if (!node.data.isTop && isRemote) {
-            return 'rcc';
+            return 'r';
         } else {
-            return 'cc';
+            return '';
         }
     }
 }

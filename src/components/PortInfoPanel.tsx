@@ -134,24 +134,21 @@ const PortInfoPanel: React.FC<PortInfoPanelProps> = ({
              return;
          }
  
-         const isSignalDuplicate = (() => {
-            const localDuplicate = messages.find((msg, index) => msg.signal === messageSignal && index !== editingMessageIndex);
-            if (localDuplicate) return true;
-
-            for (const node of nodes) {
-                for (const p of node.data.ports) {
-                    if (p.protocolName === port.protocolName && p.messages) {
-                        if (node.id === nodeId && p.id === port.id) continue;
-                        if (p.messages.some(msg => msg.signal === messageSignal)) return true;
-                    }
-                }
-            }
-            return false;
-         })();
-
-         if (isSignalDuplicate) {
-            setNotification({ message: `Error: Ya existe un mensaje con la señal "${messageSignal}" en este protocolo.`, type: 'error' });
-            return;
+        const isEditing = editingMessageIndex !== null;
+        const originalSignal = isEditing ? messages[editingMessageIndex!].signal : null;
+ 
+         if (!isEditing || (isEditing && originalSignal !== messageSignal)) {
+             const isSignalDuplicateInProtocol = nodes.some(node =>
+                 node.data.ports.some(p =>
+                     p.protocolName === port.protocolName &&
+                     p.messages?.some(msg => msg.signal === messageSignal)
+                 )
+             );
+ 
+             if (isSignalDuplicateInProtocol) {
+                 setNotification({ message: `Error: Ya existe un mensaje con la señal "${messageSignal}" en este protocolo.`, type: 'error' });
+                 return;
+             }
          }
  
          if (messageType === 'reply') {
