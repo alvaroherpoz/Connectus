@@ -106,7 +106,7 @@ export class edroomdeployment_h_template {
         const getMemoryFunctions = nodes.map(c => {
             const componentClass = this.getComponentClass(c, localNodeName);
             const instanceName = this.getInstanceName(c, localNodeName);
-            return `     ${componentClass}       * Get${instanceName}Memory(){return &systemMemory.${instanceName}Memory;}`;
+            return `     ${componentClass}::CEDROOMMemory       * Get${instanceName}Memory(){return &systemMemory.${instanceName}Memory;}`;
         }).join('\n');
 
         // Contar las conexiones locales (sin el componente Top) y remotas
@@ -406,9 +406,9 @@ ${getMemoryFunctions}
         } else if (node.data.isTop && !isRemote) {
             return '';
         } else if (!node.data.isTop && isRemote) {
-            return 'rcc';
+            return 'r';
         } else {
-            return 'cc';
+            return '';
         }
     }
 
