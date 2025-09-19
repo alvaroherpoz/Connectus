@@ -1,0 +1,434 @@
+{
+  "nodes": [
+    {
+      "id": "1",
+      "type": "componentNode",
+      "data": {
+        "componentClass": "ICUASW",
+        "name": "icuasw",
+        "ports": [
+          {
+            "id": "1",
+            "name": "Timer",
+            "type": "tiempo",
+            "subtype": "nominal",
+            "protocolName": "",
+            "messages": []
+          }
+        ],
+        "node": "Nodo1",
+        "componentId": 1,
+        "maxMessages": 10,
+        "priority": "EDROOMprioHigh",
+        "stackSize": 8192,
+        "isTop": true
+      },
+      "position": {
+        "x": -51.24938230028291,
+        "y": -96.22147069368543
+      },
+      "selectable": true,
+      "style": {
+        "zIndex": 1,
+        "backgroundColor": "hsl(257, 70%, 85%)"
+      },
+      "width": 197,
+      "height": 94,
+      "selected": false,
+      "positionAbsolute": {
+        "x": -51.24938230028291,
+        "y": -96.22147069368543
+      },
+      "dragging": false
+    },
+    {
+      "id": "2",
+      "type": "componentNode",
+      "data": {
+        "componentClass": "CCEPDManager",
+        "name": "EPDManager",
+        "ports": [
+          {
+            "id": "1",
+            "name": "BKGExecCtrl",
+            "type": "comunicacion",
+            "subtype": "nominal",
+            "protocolName": "CPBKGExecCtrl",
+            "messages": [
+              {
+                "signal": "SBKGTC",
+                "dataType": "CDTMList",
+                "direction": "entrada",
+                "type": "async"
+              }
+            ]
+          },
+          {
+            "id": "3",
+            "name": "RxTC",
+            "type": "interrupcion",
+            "subtype": "nominal",
+            "protocolName": "",
+            "messages": []
+          },
+          {
+            "id": "4",
+            "name": "TMChannelCtrl",
+            "type": "comunicacion",
+            "subtype": "nominal",
+            "protocolName": "CPTMChannelCtrl",
+            "messages": [
+              {
+                "signal": "STxTM",
+                "dataType": "CDTMList",
+                "direction": "salida",
+                "type": "invoke"
+              },
+              {
+                "signal": "STMQueued",
+                "dataType": "NULL",
+                "direction": "entrada",
+                "type": "reply",
+                "invokeSignal": "STxTM"
+              }
+            ]
+          },
+          {
+            "id": "2",
+            "name": "HK_FDIRCtrl",
+            "type": "comunicacion",
+            "subtype": "conjugado",
+            "protocolName": "CPHK_FDIRCtrl",
+            "messages": [
+              {
+                "signal": "SHK_FDIR_TC",
+                "dataType": "CDTCDescriptor",
+                "direction": "entrada",
+                "type": "async"
+              },
+              {
+                "signal": "SRecAction",
+                "dataType": "CDRecovAction",
+                "direction": "salida",
+                "type": "async"
+              }
+            ]
+          }
+        ],
+        "node": "Nodo1",
+        "componentId": 2,
+        "maxMessages": 10,
+        "priority": "EDROOMprioHigh",
+        "stackSize": 8192,
+        "isTop": false
+      },
+      "position": {
+        "x": -15.114760101856561,
+        "y": 61.45789262582597
+      },
+      "selectable": true,
+      "style": {
+        "zIndex": 1,
+        "backgroundColor": "hsl(257, 70%, 85%)"
+      },
+      "width": 265,
+      "height": 211,
+      "selected": true,
+      "dragging": false,
+      "positionAbsolute": {
+        "x": -15.114760101856561,
+        "y": 61.45789262582597
+      }
+    },
+    {
+      "id": "3",
+      "type": "componentNode",
+      "data": {
+        "componentClass": "CCBKGTCExec",
+        "name": "BKGTCExec",
+        "ports": [
+          {
+            "id": "1",
+            "name": "BKGExecCtrl",
+            "type": "comunicacion",
+            "subtype": "conjugado",
+            "protocolName": "CPBKGExecCtrl",
+            "messages": [
+              {
+                "signal": "SBKGTC",
+                "dataType": "CDTMList",
+                "direction": "entrada",
+                "type": "async"
+              }
+            ]
+          },
+          {
+            "id": "2",
+            "name": "TMChannelCtrl",
+            "type": "comunicacion",
+            "subtype": "nominal",
+            "protocolName": "CPTMChannelCtrl",
+            "messages": [
+              {
+                "signal": "STxTM",
+                "dataType": "CDTMList",
+                "direction": "salida",
+                "type": "invoke"
+              },
+              {
+                "signal": "STMQueued",
+                "dataType": "NULL",
+                "direction": "entrada",
+                "type": "reply",
+                "invokeSignal": "STxTM"
+              }
+            ]
+          }
+        ],
+        "node": "Nodo2",
+        "componentId": 5,
+        "maxMessages": 10,
+        "priority": "EDROOMprioVeryLow",
+        "stackSize": 1024,
+        "isTop": false
+      },
+      "position": {
+        "x": 276.473353571149,
+        "y": 33.80301843595615
+      },
+      "selectable": true,
+      "style": {
+        "zIndex": 1,
+        "backgroundColor": "hsl(106, 70%, 85%)"
+      },
+      "width": 259,
+      "height": 130,
+      "selected": false,
+      "positionAbsolute": {
+        "x": 276.473353571149,
+        "y": 33.80301843595615
+      },
+      "dragging": false
+    },
+    {
+      "id": "4",
+      "type": "componentNode",
+      "data": {
+        "componentClass": "CCTM_ChannelCtrl",
+        "name": "TMChannelCtrl",
+        "ports": [
+          {
+            "id": "1",
+            "name": "TMChannelCtrl3",
+            "type": "comunicacion",
+            "subtype": "conjugado",
+            "protocolName": "CPTMChannelCtrl",
+            "messages": [
+              {
+                "signal": "STxTM",
+                "dataType": "CDTMList",
+                "direction": "salida",
+                "type": "invoke"
+              },
+              {
+                "signal": "STMQueued",
+                "dataType": "NULL",
+                "direction": "entrada",
+                "type": "reply",
+                "invokeSignal": "STxTM"
+              }
+            ]
+          },
+          {
+            "id": "2",
+            "name": "TMChannelCtrl2",
+            "type": "comunicacion",
+            "subtype": "conjugado",
+            "protocolName": "CPTMChannelCtrl",
+            "messages": [
+              {
+                "signal": "STxTM",
+                "dataType": "CDTMList",
+                "direction": "salida",
+                "type": "invoke"
+              },
+              {
+                "signal": "STMQueued",
+                "dataType": "NULL",
+                "direction": "entrada",
+                "type": "reply",
+                "invokeSignal": "STxTM"
+              }
+            ]
+          },
+          {
+            "id": "3",
+            "name": "TMChannelCtrl",
+            "type": "comunicacion",
+            "subtype": "conjugado",
+            "protocolName": "CPTMChannelCtrl",
+            "messages": [
+              {
+                "signal": "STxTM",
+                "dataType": "CDTMList",
+                "direction": "salida",
+                "type": "invoke"
+              },
+              {
+                "signal": "STMQueued",
+                "dataType": "NULL",
+                "direction": "entrada",
+                "type": "reply",
+                "invokeSignal": "STxTM"
+              }
+            ]
+          }
+        ],
+        "node": "Nodo1",
+        "componentId": 3,
+        "maxMessages": 10,
+        "priority": "EDROOMprioNormal",
+        "stackSize": 8192,
+        "isTop": false
+      },
+      "position": {
+        "x": 580.7519809680769,
+        "y": 172.5382102531572
+      },
+      "selectable": true,
+      "style": {
+        "zIndex": 1,
+        "backgroundColor": "hsl(257, 70%, 85%)"
+      },
+      "width": 303,
+      "height": 171,
+      "selected": false,
+      "positionAbsolute": {
+        "x": 580.7519809680769,
+        "y": 172.5382102531572
+      },
+      "dragging": false
+    },
+    {
+      "id": "5",
+      "type": "componentNode",
+      "data": {
+        "componentClass": "CCHK_FDIRMng",
+        "name": "HK_FDIRMng",
+        "ports": [
+          {
+            "id": "3",
+            "name": "HK_FDIRTimer",
+            "type": "tiempo",
+            "subtype": "nominal",
+            "protocolName": "",
+            "messages": []
+          },
+          {
+            "id": "1",
+            "name": "HK_FDIRCtrl",
+            "type": "comunicacion",
+            "subtype": "nominal",
+            "protocolName": "CPHK_FDIRCtrl",
+            "messages": [
+              {
+                "signal": "SHK_FDIR_TC",
+                "dataType": "CDTCDescriptor",
+                "direction": "entrada",
+                "type": "async"
+              },
+              {
+                "signal": "SRecAction",
+                "dataType": "CDRecovAction",
+                "direction": "salida",
+                "type": "async"
+              }
+            ]
+          },
+          {
+            "id": "2",
+            "name": "TMChannelCtrl",
+            "type": "comunicacion",
+            "subtype": "nominal",
+            "protocolName": "CPTMChannelCtrl",
+            "messages": [
+              {
+                "signal": "STxTM",
+                "dataType": "CDTMList",
+                "direction": "salida",
+                "type": "invoke"
+              },
+              {
+                "signal": "STMQueued",
+                "dataType": "NULL",
+                "direction": "entrada",
+                "type": "reply",
+                "invokeSignal": "STxTM"
+              }
+            ]
+          }
+        ],
+        "node": "Nodo2",
+        "componentId": 4,
+        "maxMessages": 10,
+        "priority": "EDROOMprioNormal",
+        "stackSize": 1024,
+        "isTop": false
+      },
+      "position": {
+        "x": -311.1370496431962,
+        "y": 287.6967900154517
+      },
+      "selectable": true,
+      "style": {
+        "zIndex": 1,
+        "backgroundColor": "hsl(106, 70%, 85%)"
+      },
+      "width": 282,
+      "height": 171,
+      "selected": false,
+      "positionAbsolute": {
+        "x": -311.1370496431962,
+        "y": 287.6967900154517
+      },
+      "dragging": false
+    }
+  ],
+  "edges": [
+    {
+      "source": "2",
+      "sourceHandle": "1",
+      "target": "3",
+      "targetHandle": "1",
+      "id": "reactflow__edge-21-31"
+    },
+    {
+      "source": "5",
+      "sourceHandle": "1",
+      "target": "2",
+      "targetHandle": "2",
+      "id": "reactflow__edge-51-22"
+    },
+    {
+      "source": "2",
+      "sourceHandle": "4",
+      "target": "4",
+      "targetHandle": "3",
+      "id": "reactflow__edge-24-43"
+    },
+    {
+      "source": "5",
+      "sourceHandle": "2",
+      "target": "4",
+      "targetHandle": "2",
+      "id": "reactflow__edge-52-42"
+    },
+    {
+      "source": "3",
+      "sourceHandle": "2",
+      "target": "4",
+      "targetHandle": "1",
+      "id": "reactflow__edge-32-41"
+    }
+  ]
+}
