@@ -614,12 +614,9 @@ Pr_TaskRV_t CEDROOMSystemDeployment::main_task(Pr_TaskP_t){
      */
     private static getInstanceName(node: Node<NodeData>, localNodeName: string): string {
         const isRemote = node.data.node !== localNodeName;
-        const componentNameBase = node.data.name;
-        
-        if (isRemote) {
-            return `r${componentNameBase}_${node.id}`;
-        }
-        return `${componentNameBase}_${node.id}`;
+        const componentNameBase = node.data.name.replace(/\s/g, '');
+        const prefix = isRemote ? 'r' : '';
+        return `${prefix}${componentNameBase}_${node.id}`;
     }
 
     /**
@@ -631,16 +628,10 @@ Pr_TaskRV_t CEDROOMSystemDeployment::main_task(Pr_TaskP_t){
     private static getComponentClass(node: Node<NodeData>, localNodeName: string): string {
         const isRemote = node.data.node !== localNodeName;
         const componentType = node.data.componentClass.replace(/\s/g, '');
-
-        if (node.data.isTop && isRemote) {
+        if (isRemote) {
             return `R${componentType}`;
-        } else if (node.data.isTop && !isRemote) {
-            return componentType;
-        } else if (!node.data.isTop && isRemote) {
-            return `R${componentType}`;
-        } else {
-            return `${componentType}`;
         }
+        return componentType;
     }
 
     /**

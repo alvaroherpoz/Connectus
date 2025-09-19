@@ -362,12 +362,8 @@ ${getMemoryFunctions}
      */
     private static getInstanceName(node: Node<NodeData>, localNodeName: string): string {
         const isRemote = node.data.node !== localNodeName;
-        const componentNameBase = node.data.name;
-        
-        if (isRemote) {
-            return `r${componentNameBase}_${node.id}`;
-        }
-        return `${componentNameBase}_${node.id}`;
+        const componentNameBase = node.data.name.replace(/\s/g, '');
+        return `${isRemote ? 'r' : ''}${componentNameBase}_${node.id}`;
     }
     
     /**
@@ -379,16 +375,10 @@ ${getMemoryFunctions}
     private static getComponentClass(node: Node<NodeData>, localNodeName: string): string {
         const isRemote = node.data.node !== localNodeName;
         const componentType = node.data.componentClass.replace(/\s/g, '');
-
-        if (node.data.isTop && isRemote) {
+        if (isRemote) {
             return `R${componentType}`;
-        } else if (node.data.isTop && !isRemote) {
-            return componentType;
-        } else if (!node.data.isTop && isRemote) {
-            return `R${componentType}`;
-        } else {
-            return `${componentType}`;
         }
+        return componentType;
     }
 
     /**
@@ -399,16 +389,7 @@ ${getMemoryFunctions}
      */
     private static getIncludePrefix(node: Node<NodeData>, localNodeName: string): string {
         const isRemote = node.data.node !== localNodeName;
-        
-        if (node.data.isTop && isRemote) {
-            return 'r';
-        } else if (node.data.isTop && !isRemote) {
-            return '';
-        } else if (!node.data.isTop && isRemote) {
-            return 'r';
-        } else {
-            return '';
-        }
+        return isRemote ? 'r' : '';
     }
 
     private static portCounter: Record<string, number> = {};
